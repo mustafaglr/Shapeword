@@ -7,7 +7,8 @@
   const DICT = new Set(words.DICT_WORDS.split(" "));
   const COMMON = words.COMMON_WORDS.split(" ");
   const COMMON_SET = new Set(COMMON);
-  const M = 5, B = 9, BOX = 3, MIN_LEN = 3, MAX_LEN = 6, MIN_WORDS = 6;
+  let M = 5; // side of the letter field; setSize() changes it (the wordless mode plays on 6×6)
+  const B = 9, BOX = 3, MIN_LEN = 3, MAX_LEN = 6, MIN_WORDS = 6;
   const BASE_RATES = { joker: 0.025, bomb: 0.05, gold: 0.06, crystal: 0 }; // chance per newly dropped tile
 
   const isWord = (w) => w.length >= MIN_LEN && w.length <= MAX_LEN &&
@@ -388,5 +389,6 @@
 
   const api = { M, B, BOX, MIN_LEN, MAX_LEN, BASE_RATES, WORLDS, BIOMES, OBST, REGIONS, worldOf, isWord, resolveWord, letterOf, kindOf, findWords, adjacent, shapeOf, makePiece,
     plantWord, resolveChain, findChains, collapse, freshGrid, shuffleGrid, ensureFor, rngFrom, levelDef, botMoves, isJoker, starsFor, wordPoints, clearPoints, wordProgress, boardProgress, progressOf, emptyBoard, newOb, canPlace, fits, place, bestMove };
+  api.setSize = (n) => { M = n; api.M = n; };
   if (typeof module !== "undefined") module.exports = api; else root.Core = api;
 })(typeof window !== "undefined" ? window : globalThis);

@@ -97,7 +97,12 @@ assert.strictEqual(C.resolveChain("22"), null); assert.strictEqual(C.resolveChai
       const res = C.collapse(g, chains[0][1], r, { hues: true }); assert(res.grid.every(isHue)); g = res.grid;
     }
     assert(C.shuffleGrid(g, r, true).every(isHue));
-  } }
+  }
+  C.setSize(6); // the wordless mode's bigger field
+  let g = C.freshGrid(r, { hues: true }); assert(g.length === 36 && C.M === 6);
+  for (let turn = 0; turn < 8; turn++) { const chains = C.findChains(g); assert(chains.length >= 3); for (const [, p] of chains) { assert(p.every((i) => i >= 0 && i < 36)); for (let j = 1; j < p.length; j++) assert(C.adjacent(p[j - 1], p[j])); }
+    const pc = C.makePiece(g, chains[0][1]); assert(pc.w <= 6 && pc.h <= 6); const res = C.collapse(g, chains[0][1], r, { hues: true }); assert(res.grid.length === 36 && res.grid.every(isHue)); g = res.grid; }
+  C.setSize(5); assert(C.freshGrid(r, {}).length === 25); }
 
 // ----- meta rules (meta.js): trophies, quests, chests, duel ghosts -----
 const Mt = require("./meta.js");

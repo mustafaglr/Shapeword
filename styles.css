@@ -343,3 +343,10 @@ button.pill { cursor: pointer; } .pill svg { width: 18px; height: 18px; } .pill 
 .lb.top div > span:first-child svg { width: 22px; height: 22px; display: block; }
 .lb.top div:nth-child(2) > span:first-child svg { filter: grayscale(1) brightness(1.15); } .lb.top div:nth-child(3) > span:first-child svg { filter: sepia(.9) saturate(1.6) hue-rotate(-28deg) brightness(.8); }
 .lb.top strong { color: #D99400; letter-spacing: 1px; }
+.tile.hue span { font-size: 1.25em; line-height: 1; }
+/* Renk körü modu: the Okabe-Ito palette (told apart with the common colour-vision deficiencies), flat fills, and bigger shapes in the strongest contrast */
+body.cb .tile.hue, body.cb .tile.hue.gold, body.cb .tile.hue.bomb, body.cb .tile.hue.crystal { background: var(--h); text-shadow: none; box-shadow: 0 3px 0 var(--hd), inset 0 0 0 2px rgba(255,255,255,.35); }
+body.cb .tile.h1 { --h: #D55E00; --hd: #8F3F00; color: #fff; } body.cb .tile.h2 { --h: #F0E442; --hd: #A89F1C; color: #14112B; } body.cb .tile.h3 { --h: #009E73; --hd: #00694D; color: #fff; }
+body.cb .tile.h4 { --h: #0072B2; --hd: #004B75; color: #fff; } body.cb .tile.h5 { --h: #CC79A7; --hd: #8F4F73; color: #14112B; }
+body.cb .tile.hue span { font-size: 1.6em; }
+body.cb .tile.hue.gold { box-shadow: 0 0 0 3px #14112B, 0 0 0 6px #FFE08A; } body.cb .tile.hue.crystal { box-shadow: 0 0 0 3px #fff, 0 0 0 6px #6D28D9; } body.cb .tile.hue.bomb { box-shadow: 0 0 0 3px #fff, 0 0 0 6px #D00000; }

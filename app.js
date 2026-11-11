@@ -1,7 +1,8 @@
 // Shapeword interface: screens (home, map, game), input, animation, profile + cloud save, competition.
 // The rules are in core.js, the drawings in scenes.js, the sounds in sounds.js.
 document.documentElement.lang = "tr"; // Turkish casing: i -> İ, ı -> I
-const { M, B, MAX_LEN } = Core;
+const { B, MAX_LEN } = Core;
+let M = Core.M; // side of the letter field: 5 for words, 6 for colour chains (baseState sets it)
 const $ = (id) => document.getElementById(id);
 const up = (w) => w.toLocaleUpperCase("tr");
 const RM = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -77,6 +78,7 @@ const store = { get(k, d) { try { const v = localStorage.getItem(k); return v ? 
 const prefs = { sfx: true, amb: true, vib: true, ...store.get("sw4:prefs", {}) };
 if (!["renk", "rahat", "klasik"].includes(prefs.mode)) prefs.mode = prefs.easy === false ? "klasik" : "rahat"; // how a level is played: colour chains, words with help, or words alone // per device, not per player
 snd.set(prefs);
+document.body.classList.toggle("cb", !!prefs.cb); // colour-blind mode restyles the colour tiles
 const buzz = (ms) => { if (prefs.vib) try { navigator.vibrate?.(ms); } catch {} }; // Android only; iOS ignores it
 for (const ev of ["pointerup", "touchend", "click", "keydown"]) addEventListener(ev, () => snd.unlock(), true); // browsers only start audio inside a gesture; a finger going down is not one yet, lifting it is (iOS: touchend)
 addEventListener("click", (e) => { if (e.target.closest && e.target.closest("button")) snd.play("tap"); }, true);
@@ -448,7 +450,7 @@ $("gear").onclick = () => settings();
 
 // ---- settings (and the hidden admin tools) ----
 function settings() {
-  const togs = [["sfx", "Ses efektleri"], ["amb", "Ortam sesi"], ["vib", "Titreşim"]];
+  const togs = [["sfx", "Ses efektleri"], ["amb", "Ortam sesi"], ["vib", "Titreşim"], ["cb", "Renk körü modu: ayırt edilir renkler, büyük şekiller"]];
   card(`<h2>Ayarlar</h2>
     <div class="faces" id="s-faces"></div><input type="file" id="s-file" accept="image/*" hidden>
     <p class="hint">Karakterin ya da fotoğrafının küçük bir kopyası sıralamada ve haritada diğer oyunculara görünür.</p>
@@ -464,7 +466,7 @@ function settings() {
     <button class="b3 red" id="s-reset">İlerlemeyi sıfırla</button>
     <button class="b3 ghost" id="s-close">Kapat</button>`);
   $("ov").querySelectorAll(".tog").forEach((b) => (b.onclick = () => {
-    const k = b.dataset.p; prefs[k] = !prefs[k]; store.set("sw4:prefs", prefs); b.setAttribute("aria-pressed", prefs[k]); snd.set(prefs); snd.play("toggle"); if (k === "vib") buzz(20);
+    const k = b.dataset.p; prefs[k] = !prefs[k]; store.set("sw4:prefs", prefs); b.setAttribute("aria-pressed", prefs[k]); document.body.classList.toggle("cb", !!prefs.cb); snd.set(prefs); snd.play("toggle"); if (k === "vib") buzz(20);
   }));
   paintFaces();
   $("s-file").onchange = async (e) => {
@@ -620,6 +622,7 @@ $("help").onclick = () => G && helpCard(G.mode === "level" ? G.L : null);
 
 // ===================== starting a level or the duel =====================
 function baseState(L, rnd, mode, hues = false) { // hues: the wordless mode, colour chains instead of words
+  M = hues ? 6 : 5; Core.setSize(M);
   const left = Object.fromEntries(L.goals.map((g) => [g.type, g.need]));
   return { mode, L, rnd, hues, grid: Core.freshGrid(rnd, { rates: L.rates, ensure: Core.ensureFor(left), hues }), board: L.board.slice(), hand: [], score: 0, moves: L.moves, left, shown: { ...left },
     combo: 0, chain: 0, lastWordAt: -1e9, colorTurn: 0, running: false, timeLeft: DUEL_SECONDS, extended: false, rival: null, extraMoves: 0, rec: null, passed: false, tickAt: 11 };
