@@ -29,7 +29,7 @@ const OB = {
   dinamit: ["Dinamit patlat", "Dinamit kırılınca çevresindeki 3×3 alanı da patlatır; yanında başka dinamit varsa zincirleme patlar.", "#E04848"],
   cekirdek: ["Çekirdek kır", "Tahtada jeneratör (şimşekli kutu) kaldığı sürece çekirdekler kalkanlıdır. Önce jeneratörleri, sonra çekirdekleri patlat.", "#7CF5FF"],
   jenerator: ["Jeneratör", "", "#4FC3EA"],
-  bosluk: ["Boşluğu kapat", "Her blok koyduğunda bir boşluk, bitişiğindeki bloklarından birini yutar. Yanına blok bırakma; bir sıra öteden patlat.", "#7A1FA2"],
+  bosluk: ["Boşluğu kapat", "Her blok koyduğunda bir boşluk, bitişiğindeki bloklarından birini yutar. Bulunduğu satır, sütun ya da kutu dolunca kapanır: önce ona değmeyen kareleri doldur, yanındakileri en son koy.", "#7A1FA2"],
 };
 const ART = (window.Scenes && Scenes.ICONS) || {};
 const obIcon = (k) => ART[k] || `<svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="6" fill="${(OB[k === "buzCrack" ? "buz" : k] || OB.kutuk)[2]}"/></svg>`;
@@ -337,24 +337,71 @@ function openMap() {
 function jumpToCurrent(smooth) { const v = $("mapview"); v.scrollTo({ top: Math.max(0, mapCurrentY + $("mapinner").offsetTop - v.clientHeight * 0.6), behavior: smooth && !RM ? "smooth" : "auto" }); }
 $("map-back").onclick = landing; $("map-jump").onclick = () => jumpToCurrent(true);
 
+// ---- obstacle demos: a board corner played frame by frame, on the "?" card and when a world begins ----
+// A frame is three rows of five cells (the left three columns are one 3×3 box): . empty, b block, n block just placed, x cell that clears, e block being swallowed,
+// O the obstacle (C cracked, F faded, S shielded, 1-5 its countdown, ! stinging, * breaking), G generator (g breaking), A the gold letter a bud gives.
+// Every group of n is a shape a word can make (3-6 touching cells). A frame without a caption keeps the one before it.
+const DEMOS = {
+  kutuk: [["O..../...O./.....", "Kütük kendiliğinden kırılmaz, bir patlama ister."], ["Onn../.nnO./.....", "3×3 kutuyu (ya da bir satırı, sütunu) doldur."], ["Obb../nbbO./nnn.."],
+    ["*xx../xxx*./xxx..", "Kutu patlar: içindeki ve hemen yanındaki kütükler kırılır."], ["...../...../....."]],
+  akrep: [["...../.5.../.....", "Akrebin sayacı, koyduğun her blokta 1 azalır."], ["nnn../.4.../....."], ["bbb../n3.../nn..."], ["bbb../b2n../bbnn.", "0 olmadan kutusunu doldur: patlayınca ezilir."], ["xxx../x*x../xxxb."],
+    ["...../...1./.....", "0'a inerse sokar: 1 hamlen gider, sayaç 5'e döner."], ["nnn../...!./....."], ["bbb../...5./....."]],
+  yengec: [["...../O..../.....", "Yengeç, koyduğun her blokta 1 kare yana yürür."], ["nnn../.O.../....."], ["bbb../..O../..nnn"], ["bbb../nnO../nnbbb", "Varacağı kutuyu sen tamamla: kutu patlayınca yakalanır."], ["xxx../xx*../xxxbb"], ["...../...../...bb"]],
+  lav: [["...../.O.../.....", "Lav, hiç söndürmediğin her hamlede 1 kare yayılır."], ["nnn../.OO../....."], ["bbb../nOOO./nn..."], ["bbb../bOOO./bbnnn", "Bulunduğu kutuyu (ya da satırı, sütunu) doldur."],
+    ["xxx../x**O./xxxbb", "Kutusu dolan lav söner. Yanındaki patlama yetmez: dışarıdaki lav kaldı."], ["...../...O./...bb"]],
+  buz: [["...../.O.../.....", "Buz iki darbe ister."], ["bbb../bO.../bb..."], ["bbb../bOn../bbnn."], ["xxx../xCx../xxxb.", "İlk patlamada çatlar…"], ["bbb../bC.../bb.b."], ["bbb../bCnn./bbnb."], ["xxx../x*xb./xxxb.", "…ikincisinde kırılır."]],
+  hayalet: [["...../.O.../.....", "Hayalet bir hamle görünür, bir hamle silikleşir."], ["nnn../.F.../.....", "Silikken patlama ona işlemez."], ["bbb../nO.../nn...", "Kutuyu, hayalet görünürken tamamla."], ["bbb../bOn../bbnn."], ["xxx../x*x../xxxb."], ["...../...../...b."]],
+  tomurcuk: [["...../.O.../.....", "Tomurcuk da bir patlamayla açılır."], ["bbb../bO.../bb..."], ["bbb../bOn../bbnn."], ["xxx../x*x../xxxb."],
+    ["...../.A.../...b.", "Çiçek açınca harf alanında bir harf altına döner: o kelimenin puanı ikiye katlanır."]],
+  dinamit: [["...bb/..Obb/...Ob", "Dinamit patlayınca çevresindeki 3×3 alanı da patlatır."], ["bbbbb/b.Obb/b..Ob"], ["bbbbb/bnObb/bnnOb"], ["xxxxb/xx*xb/xxxOb", "Kutusu dolunca patlar ve kutunun dışına taşar."],
+    ["....b/....x/...*x", "Yanındaki dinamit de zincirleme patlar."], ["....b/...../....."]],
+  cekirdek: [["...../.S.G./.....", "Jeneratör (şimşekli kutu) durdukça çekirdek kalkanlıdır."], ["bbb../bS.G./bb..."], ["bbb../bSnG./bbnn."], ["xxx../xSxg./xxxb.", "Patlama çekirdeğe işlemez ama yanındaki jeneratörü kırar: kalkan düşer."],
+    ["bbb../bO.../bb.b."], ["bbb../bOnn./bbnb."], ["xxx../x*xb./xxxb.", "Şimdi çekirdek kırılır."]],
+  bosluk: [["O..../...../.....", "Boşluk, koyduğun her blokta bitişiğindeki bir bloğunu yutar."], ["Onnn./...../....."], ["Oebb./...../....."], ["O.bb./..n../nnn..", "Önce boşluğa değmeyen kareleri doldur."],
+    ["Onbb./nnb../bbb..", "Yanındaki kareleri en son, tek blokla kapat."], ["*xxb./xxx../xxx..", "Kutusu (ya da satırı, sütunu) dolunca boşluk kapanır."], ["...b./...../....."]],
+};
+const demoHTML = (kind) => (DEMOS[kind] ? `<div class="demo" data-kind="${kind}" aria-hidden="true"><div class="demogrid"></div><p></p></div>` : "");
+function demoFrame(kind, frame) {
+  const ob = (cls = "", badge = "", icon = kind) => `<div class="cell ob${cls}" data-ob="${kind}"><b>${obIcon(icon)}${badge}</b></div>`;
+  const block = (color, cls = "") => `<div class="cell on${cls}"><b style="background:${color}"></b></div>`;
+  return [...frame.replace(/\//g, "")].map((ch, i) => {
+    const out = ch === "." ? `<div class="cell"><b></b></div>` : ch === "b" ? block(COLORS[3]) : ch === "n" ? block(COLORS[1], " new") : ch === "x" ? block(COLORS[3], " clr") : ch === "e" ? block(COLORS[1], " eat")
+      : ch === "O" ? ob() : ch === "C" ? ob("", "", "buzCrack") : ch === "F" ? ob(" off") : ch === "S" ? ob(" shielded") : ch === "*" ? ob(" brk") : ch === "G" ? ob("", "", "jenerator") : ch === "g" ? ob(" brk", "", "jenerator")
+      : ch === "A" ? `<div class="cell"><b class="gilt">${star(true, 20)}</b></div>` : ch === "!" ? ob(" sting", `<em class="hot">0</em>`) : ob("", `<em${ch <= 2 ? ' class="hot"' : ""}>${ch}</em>`);
+    return i % 5 > 2 ? out.replace('class="cell', 'class="cell bx') : out; // the neighbouring box is shaded, as on the board
+  }).join("");
+}
+function playDemo() { // call once the card is on screen; it stops by itself when the card goes
+  const el = $("ov").querySelector(".demo"); if (!el) return;
+  const frames = DEMOS[el.dataset.kind]; let k = -1;
+  const step = () => {
+    if (!el.isConnected || $("ov").hidden) return;
+    k = (k + 1) % frames.length; el.firstChild.innerHTML = demoFrame(el.dataset.kind, frames[k][0]);
+    if (frames[k][1]) el.lastChild.textContent = frames[k][1];
+    if (!RM) setTimeout(step, frames[k][1] ? 2300 : 1000);
+  };
+  if (RM) { el.classList.add("manual"); el.onclick = step; } // no motion wanted: the player taps through the steps
+  step();
+}
+
 // ---- level intro and help ----
-function goalRows(L, left) {
-  return `<div class="goallist">${L.goals.map((g) => { const o = goalOf(g.type); return `<div>${o.svg}<span><strong>${o.name}: ${left ? Math.max(0, left[g.type]) + " kaldı" : g.need}</strong>${o.how}</span></div>`; }).join("")}</div>`;
+function goalRows(L, left, brief) { // brief: the demo next to it does the explaining
+  return `<div class="goallist">${L.goals.map((g) => { const o = goalOf(g.type); return `<div>${o.svg}<span><strong>${o.name}: ${left ? Math.max(0, left[g.type]) + " kaldı" : g.need}</strong>${brief ? "" : o.how}</span></div>`; }).join("")}</div>`;
 }
 function intro(n) {
   const L = Core.levelDef(n), theme = L.joker ? JOKER_THEME : THEMES[L.world], rec = recordOf(n), newWorld = n % 10 === 0 && n > 0;
   card(`<div class="lvlhead">${L.joker ? `<span class="badge">Joker bölümü</span>` : newWorld ? `<span class="badge plain">Yeni dünya · yeni engel</span>` : ""}<h2>Bölüm ${n + 1}</h2><p>${L.joker ? "Bol joker ve altın harf, ekstra hediye" : `${L.biome} dünyası`} · ${L.moves} hamle</p></div>
-    ${goalRows(L)}
+    ${n % 10 === 0 ? goalRows(L, null, true) + demoHTML(L.goals[0].type) : goalRows(L)}
     <div class="stars">${[1, 2, 3].map((k) => star(k <= (profile.stars[n] || 0), 34)).join("")}</div>
     <p class="rec">${rec ? (rec.me ? `Rekor sende: ${rec.score} puan` : `Rekor: ${esc(rec.name)} · ${rec.score} puan`) : "Bu bölümde henüz rekor yok"}</p>
     <p>Hepsini bitir ★★★ · %70 ★★ · %40 ★</p>
     <button class="b3 xl green" id="i-go">Başla</button><button class="b3 ghost" id="i-back">Vazgeç</button>`, theme);
-  $("i-go").onclick = () => startLevel(n); $("i-back").onclick = closeCard;
+  $("i-go").onclick = () => startLevel(n); $("i-back").onclick = closeCard; playDemo();
 }
 function helpCard(L) {
   if (G && !$("app").hidden) busy = true;
   card(`<h2>${L ? "Bu bölümde" : "Nasıl oynanır?"}</h2>
-    ${L ? goalRows(L, G.left) : ""}
+    ${L ? goalRows(L, G.left) + L.goals.map((g) => demoHTML(g.type)).join("") : ""}
     <ol class="rules">
       <li>Harf alanında yan yana, alt alta ya da çapraz duran harfleri kaydırarak 3–6 harfli bir kelime yaz. Her kelime 1 hamle.</li>
       <li>Çizdiğin yol aynı şekilde bir blok olur ve aşağıdaki kutuya düşer. En fazla 3 blok tutabilirsin.</li>
@@ -365,6 +412,7 @@ function helpCard(L) {
     </ol>
     <button class="b3 blue" id="h-ok">Anladım</button>`);
   $("h-ok").onclick = () => { closeCard(); if (G && !$("app").hidden) busy = false; };
+  playDemo();
 }
 $("help").onclick = () => G && helpCard(G.mode === "level" ? G.L : null);
 
@@ -385,7 +433,7 @@ function openScreen() {
   const theme = G.mode === "duel" ? DUEL_THEME : G.L.joker ? JOKER_THEME : THEMES[G.L.world];
   paintScene($("gamebg"), G.L.world);
   $("field").style.setProperty("--c1", theme[0]); $("field").style.setProperty("--c2", theme[1]);
-  $("tagline").textContent = G.mode === "duel" ? "Günlük Düello" : `${G.L.joker ? "Joker" : G.L.biome} · Bölüm ${G.L.n + 1}`;
+  $("tagline").innerHTML = G.mode === "duel" ? "Günlük Düello" : `<b>Bölüm ${G.L.n + 1}</b>${G.L.joker ? "Joker" : G.L.biome}`;
   $("help").hidden = G.mode === "duel"; $("back").setAttribute("aria-label", G.mode === "duel" ? "Ana ekran" : "Haritaya dön");
   busy = false; lastTick = performance.now();
   say(G.mode === "duel" ? "Süre başladı. Ne kadar çok puan, o kadar iyi." : "Harfleri kaydırıp kelime yaz", "msg");
