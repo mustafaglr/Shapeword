@@ -715,20 +715,35 @@ $("gridwrap").addEventListener("pointerdown", (e) => {
   if (G.hand.length >= 3) { say("Elin dolu. Önce bir blok yerleştir.", "msg"); bump($("hand")); return; }
   if (G.mode === "level" && G.moves <= 0) { say("Hamle kalmadı. Elindeki blokları yerleştir.", "msg"); return; }
   const i = tileAt(e.clientX, e.clientY); if (i === null) return;
-  e.preventDefault(); swiping = true; path = [i]; hintPath = []; markHint(); showPath();
+  e.preventDefault(); swiping = true; path = [i]; lastPt = [e.clientX, e.clientY]; hintPath = []; markHint(); showPath();
+  try { $("gridwrap").setPointerCapture(e.pointerId); } catch {}
 });
+// Browsers report fast swipes as a few far-apart points; walking the straight line between them in small steps
+// catches every tile the finger crossed, so a quick swipe does not skip a letter and break the word.
+let lastPt = null;
+function visitTile(x, y) {
+  const i = tileAt(x, y), last = path[path.length - 1];
+  if (i === null || i === last) return false;
+  if (path.length > 1 && i === path[path.length - 2]) { path.pop(); return true; }
+  if (!path.includes(i) && Core.adjacent(last, i) && path.length < MAX_LEN) { path.push(i); return true; }
+  return false;
+}
+function traceTo(x, y) {
+  const [x0, y0] = lastPt || [x, y], step = Math.max(3, geo().size / 6), n = Math.max(1, Math.ceil(Math.hypot(x - x0, y - y0) / step));
+  let changed = false;
+  for (let s = 1; s <= n; s++) changed = visitTile(x0 + ((x - x0) * s) / n, y0 + ((y - y0) * s) / n) || changed;
+  lastPt = [x, y];
+  return changed;
+}
 addEventListener("pointermove", (e) => {
   if (swiping) {
-    const i = tileAt(e.clientX, e.clientY), last = path[path.length - 1];
-    if (i === null || i === last) return;
-    if (path.length > 1 && i === path[path.length - 2]) path.pop();
-    else if (!path.includes(i) && Core.adjacent(last, i) && path.length < MAX_LEN) path.push(i);
-    else return;
-    showPath();
+    const pts = e.getCoalescedEvents?.() || []; let changed = false;
+    for (const p of pts.length ? pts : [e]) changed = traceTo(p.clientX, p.clientY) || changed;
+    if (changed) showPath();
   } else if (drag) moveDrag(e);
 });
-addEventListener("pointerup", () => { if (swiping) endSwipe(); else if (drag) endDrag(); });
-addEventListener("pointercancel", () => { if (swiping) { swiping = false; path = []; markPath(); } if (drag) dropBack(); });
+addEventListener("pointerup", (e) => { if (swiping) { if (traceTo(e.clientX, e.clientY)) showPath(); endSwipe(); } else if (drag) endDrag(); });
+addEventListener("pointercancel", () => { if (swiping) endSwipe(); if (drag) dropBack(); }); // a browser that cancels mid-swipe still gets the word
 
 function endSwipe() {
   swiping = false;
