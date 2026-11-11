@@ -1,4 +1,4 @@
-// Self-check for core.js (Turkish word list): node test.js
+// Self-check for core.js (Turkish word list) and meta.js: node test.js
 const assert = require("assert");
 const C = require("./core.js");
 const rnd = C.rngFrom("test"), B = C.B, at = (r, c) => r * B + c;
@@ -83,6 +83,24 @@ function play(n, seed, budget) {
   }
   return { stars: C.starsFor(L, left), used };
 }
+// ----- meta rules (meta.js): trophies, quests, chests, duel ghosts -----
+const Mt = require("./meta.js");
+assert.deepStrictEqual([0, 99, 100, 249, 250, 999, 1000, 5000].map(Mt.tierOf), [0, 0, 1, 1, 2, 4, 5, 5]);
+assert.strictEqual(Mt.cupsAfter(90, 5), 120); assert.strictEqual(Mt.cupsAfter(90, 0), 100); assert.strictEqual(Mt.cupsAfter(90, -5), 80);
+assert.strictEqual(Mt.cupsAfter(104, -1), 100, "a loss stops at the floor of the tier"); assert.strictEqual(Mt.cupsAfter(3, -1), 0);
+{ const q1 = Mt.questsFor(C.rngFrom("2026-11-11:gorev")), q2 = Mt.questsFor(C.rngFrom("2026-11-11:gorev")), seen = new Set();
+  assert.deepStrictEqual(q1, q2, "the same day gives the same quests"); assert.strictEqual(new Set(q1).size, 3);
+  for (let d = 1; d <= 60; d++) Mt.questsFor(C.rngFrom(`2026-12-${d}:gorev`)).forEach((k) => { assert(Mt.QUESTS[k]); seen.add(k); });
+  assert.strictEqual(seen.size, Object.keys(Mt.QUESTS).length, "every quest comes up"); }
+for (const kind in Mt.CHESTS) {
+  const [, lo, hi, nb] = Mt.CHESTS[kind], r = C.rngFrom("chest:" + kind); let minT = 1e9, maxT = 0, minB = 9, maxB = 0;
+  for (let i = 0; i < 400; i++) { const l = Mt.chestLoot(kind, r); minT = Math.min(minT, l.tokens); maxT = Math.max(maxT, l.tokens); minB = Math.min(minB, l.boosters.length); maxB = Math.max(maxB, l.boosters.length); assert(l.boosters.every((k) => Mt.BOOSTER_KEYS.includes(k))); }
+  assert(minT >= lo && maxT <= hi && maxT > minT, kind + " chest tokens"); assert(minB === Math.floor(nb) && maxB === Math.ceil(nb), kind + " chest boosters");
+}
+{ const run = Mt.cleanRun([[5, 40], [1, 10], "x", [9, -3], [20, 90], [3]]);
+  assert.deepStrictEqual(run, [[1, 10], [5, 40], [20, 90]]); assert.deepStrictEqual([0, 1, 4, 5, 19, 20, 500].map((t) => Mt.ghostAt(run, t)), [0, 10, 10, 40, 40, 90, 90]);
+  assert.deepStrictEqual(Mt.cleanRun("nope"), []); assert.strictEqual(Mt.quickIdx(2), 2); assert.strictEqual(Mt.quickIdx(99), null); assert.strictEqual(Mt.quickIdx("1"), null); }
+
 if (process.argv.includes("--calibrate")) { // prints the MOVES table for core.js
   const table = [];
   for (let n = 0; n < 100; n++) {

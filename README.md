@@ -14,6 +14,10 @@ Telefonda tarayıcıdan açıp "Ana Ekrana Ekle" dersen kendi simgesiyle tam ekr
 - **Sesler:** hepsi tarayıcıda üretilir. Kaydırdığın her harf dünyanın gamında bir nota çalar; her engelin kendi sesi, her dünyanın kendi ortam sesi var. Ayarlar'dan kapatılabilir.
 - **Rekabet:** haftalık lig, günlük düello (o gün oynamış gerçek bir oyuncu varsa rakip odur), bölüm rekorları, haritada diğer oyuncular.
 - **Günlük ödül:** 7 günlük seri.
+- **Jeton ve sandıklar:** 4 saatte bir bedava sandık, her 12 yıldızda yıldız sandığı, dünya, görev, kademe ve lig sandıkları. Jetonla +5 hamle ya da güçlendirici alınır.
+- **Günün görevleri:** her gün herkese aynı üç görev; üçü bitince görev sandığı.
+- **Galibiyet serisi:** üst üste geçilen her bölüm bir sonrakine özel harfle başlatır (joker, altın, bomba); yarıda bırakmak seriyi bitirir.
+- **Meydan okuma ve kupalar:** bir oyuncuya meydan okursun, o da aynı harflerle senin oyununun kaydına karşı oynar. Kazanan 30 kupa alır, kaybeden 10 verir; kupalar kademeyi belirler (Bronz → Efsane). Oyuncular birbirine yalnızca hazır kısa mesaj gönderebilir.
 - **Karakter:** varsayılan ismin baş harfi; Ayarlar'dan 10 karakterden biri ya da cihazdan bir fotoğraf seçilebilir. Fotoğraf cihazda 80×80 küçük bir kopyaya çevrilir; yalnızca bu kopya bulut kaydına yazılır ve diğer oyunculara görünür.
 - **Bulut kaydı:** ilk açılışta ismini sorar; aynı isimle başka cihazdan girersen kaldığın yerden devam edersin (JSONBin; şifre yok, test sürümü).
 
@@ -23,6 +27,7 @@ Telefonda tarayıcıdan açıp "Ana Ekrana Ekle" dersen kendi simgesiyle tam ekr
 |---|---|
 | `index.html`, `styles.css` | sayfa iskeleti ve görünüm |
 | `app.js` | arayüz: ekranlar, kaydırma ve sürükleme, animasyonlar, kayıt, rekabet |
+| `meta.js` | jeton, kupa ve kademe, görev, sandık kuralları ve sayıları |
 | `core.js` | kurallar: kelime bulma, blok yerleştirme, engeller, bölüm üretimi, sanal oyuncu |
 | `scenes.js` | çizimler: dünya manzaraları, harita, engel simgeleri, uygulama simgesi |
 | `sounds.js` | ses motoru (WebAudio) |

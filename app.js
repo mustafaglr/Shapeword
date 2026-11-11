@@ -58,6 +58,7 @@ const ICONS = {
   lock: '<rect x="5" y="11" width="14" height="10" rx="2" fill="currentColor" stroke="none"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
   edit: '<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
   camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
+  quest: '<path d="M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/>',
   flame: '<path d="M12 3c1 3 4 4.5 4 8.5a4 4 0 0 1-8 0c0-1.5.6-2.5 1.5-3.5C9.5 9.5 11 8 12 3z" fill="currentColor" stroke="none"/>',
 };
 const svgIcon = (body) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
@@ -87,6 +88,53 @@ const inv = () => profile.inv;
 const totalStars = (p = profile) => Object.values(p.stars || {}).reduce((a, b) => a + b, 0);
 const nextLevel = (p = profile) => { let n = 0; while (p.stars && p.stars[n]) n++; return n; };
 const unlocked = (n) => isAdmin() || n <= nextLevel();
+// ---- tokens, trophies, win streak, chest counters and today's quests live in profile.meta; the rules and numbers are in meta.js ----
+function meta(p = profile) {
+  if (p !== profile) return (p && typeof p.meta === "object" && p.meta) || {};
+  if (!p.meta || typeof p.meta !== "object") // an older save starts one chest short of what its stars and worlds would give: a first chest to open, not a pile
+    p.meta = { tokens: Meta.PAY.start, cups: 0, ws: 0, starChests: Math.max(0, Math.floor(totalStars(p) / Meta.STAR_STEP) - 1), worldChests: Math.max(0, Math.floor(nextLevel(p) / 10) - 1), tierGot: 0, freeAt: 0, seen: {} };
+  const m = p.meta;
+  if (!m.q || m.q.date !== TODAY) m.q = { date: TODAY, p: {}, got: {}, chest: false };
+  return m;
+}
+const cupsOf = (p) => { const c = +meta(p).cups; return Number.isFinite(c) && c > 0 ? Math.floor(c) : 0; };
+const QUEST_KEYS = Meta.questsFor(Core.rngFrom(TODAY + ":gorev"));
+const stash = () => store.set("sw4:profile", profile); // progress worth keeping but not worth a cloud write (a quest counter after every word)
+const canPay = (n) => isAdmin() || meta().tokens >= n;
+function spend(n) { if (isAdmin()) return true; if (meta().tokens < n) return false; meta().tokens -= n; saveProfile(); return true; }
+function quest(key, n = 1) { // called from play; only today's three count
+  const q = meta().q, need = QUEST_KEYS.includes(key) ? Meta.QUESTS[key][1] : 0, had = q.p[key] || 0;
+  if (!need || had >= need) return;
+  q.p[key] = Math.min(need, had + n); stash();
+  if (q.p[key] >= need) toast(`Görev tamam: ${Meta.QUESTS[key][0].replace("{n}", need)}`);
+}
+function pendingChests() { // earned, not opened yet
+  const m = meta(), out = [];
+  if (!m.q.chest && QUEST_KEYS.every((k) => m.q.got[k])) out.push("quest");
+  for (let i = m.starChests || 0; i < Math.floor(totalStars() / Meta.STAR_STEP); i++) out.push("star");
+  for (let i = m.worldChests || 0; i < Math.floor(nextLevel() / 10); i++) out.push("world");
+  for (let i = m.tierGot || 0; i < Meta.tierOf(cupsOf(profile)); i++) out.push("tier");
+  return out.concat(Array.isArray(m.box) ? m.box.filter((k) => k === "league") : []);
+}
+function takeChest(kind) { // pays out and marks it opened; returns what was inside
+  const m = meta(), loot = Meta.chestLoot(kind, Math.random);
+  if (kind === "free") m.freeAt = Date.now() + Meta.FREE_MS; else if (kind === "quest") m.q.chest = true; else if (kind === "star") m.starChests = (m.starChests || 0) + 1;
+  else if (kind === "world") m.worldChests = (m.worldChests || 0) + 1; else if (kind === "tier") m.tierGot = (m.tierGot || 0) + 1; else m.box.splice(m.box.indexOf(kind), 1);
+  m.tokens += loot.tokens; loot.boosters.forEach((k) => inv()[k]++); saveProfile();
+  return loot;
+}
+function cupsChange(diff) { // after a duel: my score minus theirs
+  const m = meta(), before = cupsOf(profile); m.cups = Meta.cupsAfter(before, diff);
+  return { delta: m.cups - before, up: Meta.tierOf(m.cups) > Meta.tierOf(before) };
+}
+function rollWeek() { // a new league week has begun: last week's place pays Lig sandığı chests, once. Returns the place when there is a prize.
+  const w = profile.week; if (!w || w.id === WEEK) return null;
+  const last = (p) => (p.week && p.week.id === w.id ? +p.week.pts || 0 : p.prevWeek && p.prevWeek.id === w.id ? +p.prevWeek.pts || 0 : 0), rivals = others();
+  const rank = 1 + rivals.filter((p) => last(p) > w.pts).length, n = w.pts > 0 ? (rank === 1 ? (rivals.length ? 2 : 1) : rank <= 3 ? 1 : 0) : 0, m = meta();
+  profile.prevWeek = { id: w.id, pts: w.pts, rank }; profile.week = { id: WEEK, pts: 0 };
+  for (let i = 0; i < n; i++) (m.box ||= []).push("league");
+  return n ? { rank, n, pts: w.pts } : null;
+}
 // league week, today's duel and the daily streak: the newer one wins, a tie keeps the bigger number
 const newer = (x, y, key, val) => (!x ? y : !y ? x : x[key] === y[key] ? (x[val] >= y[val] ? x : y) : x[key] > y[key] ? x : y);
 function mergeProfiles(a, b) { // same player on two devices: best result per level wins, newer boosters win
@@ -96,21 +144,22 @@ function mergeProfiles(a, b) { // same player on two devices: best result per le
   for (const [k, v] of Object.entries(b.best || {})) out.best[k] = Math.max(out.best[k] || 0, v);
   out.duelBest = Math.max(a.duelBest || 0, b.duelBest || 0);
   out.inv = (b.updated || 0) > (a.updated || 0) ? { ...b.inv } : { ...a.inv };
-  out.week = newer(a.week, b.week, "id", "pts"); out.duel = newer(a.duel, b.duel, "date", "score"); out.streak = newer(a.streak, b.streak, "last", "n"); out.face = newer(a.face, b.face, "t", "t");
+  out.week = newer(a.week, b.week, "id", "pts"); out.duel = newer(a.duel, b.duel, "date", "score"); out.streak = newer(a.streak, b.streak, "last", "n"); out.face = newer(a.face, b.face, "t", "t"); out.prevWeek = newer(a.prevWeek, b.prevWeek, "id", "pts");
+  out.meta = !a.meta ? b.meta : !b.meta ? a.meta : (b.updated || 0) > (a.updated || 0) ? b.meta : a.meta; // tokens, trophies, chests: the device that played last knows best
   out.updated = Math.max(a.updated || 0, b.updated || 0);
   return out;
 }
 function saveProfile() { profile.updated = Date.now(); store.set("sw4:profile", profile); cloudSaveSoon(); }
 function addWeek(pts) { // league points: only improvements count, so replaying an easy level earns nothing
   if (pts <= 0) return;
-  if (!profile.week || profile.week.id !== WEEK) profile.week = { id: WEEK, pts: 0 };
+  rollWeek(); if (!profile.week || profile.week.id !== WEEK) profile.week = { id: WEEK, pts: 0 };
   profile.week.pts += pts;
 }
 
 // Cloud: one JSONBin bin holds every player under its name. Works on the GitHub Pages copy; the Claude preview cannot reach other sites.
 // shortcut: last-write-wins per bin and no login; fine for testing with friends, needs a real backend before launch.
 const CLOUD = window.SW_CLOUD && window.SW_CLOUD.url ? window.SW_CLOUD : null;
-let cloudInfo = CLOUD ? "Bulut: bağlanıyor…" : "Bulut kapalı: kayıt sadece bu cihazda", cloudPlayers = null, saveTimer = null;
+let cloudInfo = CLOUD ? "Bulut: bağlanıyor…" : "Bulut kapalı: kayıt sadece bu cihazda", cloudPlayers = null, cloudDuels = null, saveTimer = null;
 async function cloudGet() {
   const r = await fetch(CLOUD.url + "/latest", { headers: { [CLOUD.header || "X-Master-Key"]: CLOUD.key, "X-Bin-Meta": "false" }, cache: "no-store" });
   if (!r.ok) throw new Error("HTTP " + r.status);
@@ -129,15 +178,19 @@ async function cloudSync() { // pull, merge both ways, push
     const justReset = profile.resetAt && (!mine || profile.resetAt > (mine.updated || 0)); // a reset overwrites the cloud copy instead of merging it back
     if (!justReset) profile = mergeProfiles(profile, mine);
     store.set("sw4:profile", profile);
-    all.players[profile.id] = { ...profile };
+    all.duels = withOutbox(all.duels && typeof all.duels === "object" && !Array.isArray(all.duels) ? all.duels : {}); // challenge records travel in the same save
+    const sent = (profile.outbox || []).length;
+    for (const k of Object.keys(all.duels)) if (!all.duels[k] || Date.now() - (+all.duels[k].t || 0) > 7 * 864e5) delete all.duels[k]; // a week is enough for anyone to answer
+    const { outbox, ...pub } = profile; all.players[profile.id] = pub;
     // shortcut: a JSONBin bin holds about 100 KB; when it is nearly full the photo stays on this device only. Photos need real storage once there is a backend.
     if (profile.face && profile.face.pic && JSON.stringify(all).length > 90000) all.players[profile.id].face = { t: profile.face.t };
     await cloudPut(all);
-    cloudPlayers = all.players; cloudInfo = `Bulut: kaydedildi ${stamp()}`;
+    if (sent) { profile.outbox = profile.outbox.slice(sent); stash(); }
+    cloudPlayers = all.players; cloudDuels = all.duels; cloudInfo = `Bulut: kaydedildi ${stamp()}`;
   } catch (e) { cloudInfo = "Bulut: bağlantı yok, kayıt bu cihazda duruyor"; }
 }
 function cloudSaveSoon() { if (!CLOUD) return; clearTimeout(saveTimer); saveTimer = setTimeout(cloudSync, 1200); }
-async function cloudPeek() { if (!CLOUD) return null; try { const all = await cloudGet(); cloudPlayers = all.players; return all; } catch { cloudInfo = "Bulut: bağlantı yok"; return null; } }
+async function cloudPeek() { if (!CLOUD) return null; try { const all = await cloudGet(); cloudPlayers = all.players; cloudDuels = withOutbox(all.duels && typeof all.duels === "object" ? all.duels : {}); return all; } catch { cloudInfo = "Bulut: bağlantı yok"; return null; } }
 // everyone else in the cloud save; the admin account never competes
 const others = () => (cloudPlayers ? Object.values(cloudPlayers).filter((p) => p && p.id !== profile.id && p.id !== "admin") : []);
 function recordOf(n) { // the best score on a level, and whose it is
@@ -206,7 +259,7 @@ function homeScene(world) { // on the home screen the scene fills the space abov
 }
 function show(which, world) { // "landing" | "map" | "game"
   $("landing").hidden = which !== "landing"; $("mapview").hidden = which !== "map"; $("app").hidden = which !== "game"; $("gamebg").hidden = which !== "game";
-  if (which !== "game") { busy = true; if (G) G.running = false; }
+  if (which !== "game") { abandon(); busy = true; if (G) G.running = false; }
   snd.setWorld(world);
 }
 function card(html, theme) { $("ov").innerHTML = `<div class="card"${theme ? ` style="--c1:${theme[0]};--c2:${theme[1]}"` : ""}>${html}</div>`; $("ov").hidden = false; $("ov").querySelector("button, input")?.focus(); snd.play("open"); }
@@ -255,6 +308,58 @@ function paintFaces() { // the picker on the settings card: the letter, the char
   $("s-photo").onclick = () => $("s-file").click();
 }
 
+// ---- chests, quests, the weekly prize ----
+const COIN = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="#FFC93C" stroke="#C98A00" stroke-width="1.6"/><circle cx="12" cy="12" r="5.8" fill="none" stroke="#E0A200" stroke-width="1.5"/><path d="M8.6 7.6a6 6 0 0 1 3.4-1.4" stroke="#FFF6D0" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg>';
+const CUP = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10v5a5 5 0 0 1-10 0z" fill="#FFC93C" stroke="#C98A00" stroke-width="1.5" stroke-linejoin="round"/><path d="M7 5.5H4.2v1.2A3.3 3.3 0 0 0 7.3 10M17 5.5h2.8v1.2a3.3 3.3 0 0 1-3.1 3.3M12 14v3.5M8.5 20h7" stroke="#C98A00" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>';
+const tierBadge = (t) => `<svg class="tierb" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l8 3v6c0 5-3.5 8.6-8 11-4.5-2.4-8-6-8-11V5z" fill="${Meta.TIERS[t][2]}" stroke="rgba(0,0,0,.28)" stroke-width="1"/><path d="M12 6.5l1.6 3.3 3.6.5-2.6 2.5.6 3.6L12 14.7l-3.2 1.7.6-3.6-2.6-2.5 3.6-.5z" fill="#fff" opacity=".92"/></svg>`;
+const CHEST_ART = '<svg viewBox="0 0 120 110" aria-hidden="true"><circle class="glow" cx="60" cy="52" r="46"/><g class="lid"><path d="M14 46V34a22 22 0 0 1 22-22h48a22 22 0 0 1 22 22v12z" fill="var(--c1)"/><path d="M14 40h92v6H14z" fill="var(--c2)"/><path d="M28 13.5h8V46h-8zM84 13.5h8V46h-8z" fill="var(--c2)" opacity=".55"/></g><path d="M14 46h92v44a8 8 0 0 1-8 8H22a8 8 0 0 1-8-8z" fill="var(--c1)"/><path d="M14 46h92v8H14z" fill="var(--c2)"/><path d="M28 46h8v52h-8zM84 46h8v52h-8z" fill="var(--c2)" opacity=".55"/><g class="lock"><rect x="50" y="40" width="20" height="24" rx="5" fill="#FFE08A" stroke="#B8801A" stroke-width="2"/><circle cx="60" cy="50" r="3" fill="#7A4A00"/><path d="M60 51v6" stroke="#7A4A00" stroke-width="2.5" stroke-linecap="round"/></g></svg>';
+const chestIcon = (kind) => `<i class="chesti" style="--c1:${Meta.CHESTS[kind][4]};--c2:${Meta.CHESTS[kind][5]}">${CHEST_ART}</i>`;
+const hms = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 3600)}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}`; };
+const purse = () => `<p class="purse">${COIN}${isAdmin() ? "∞" : meta().tokens} jetonun var</p>`;
+function chestCard(kind) { // tap to open; "Al" moves on to the next chest that is waiting, if any
+  const c = Meta.CHESTS[kind];
+  card(`<h2>${c[0]}</h2><button class="chest" id="c-box" style="--c1:${c[4]};--c2:${c[5]}" aria-label="Sandığı aç">${CHEST_ART}</button><p id="c-say">Dokun ve aç</p><div class="gifts" id="c-loot"></div><button class="b3 xl green" id="c-ok" hidden>Al</button>`);
+  $("c-box").onclick = () => {
+    if ($("c-box").classList.contains("open")) return;
+    const loot = takeChest(kind), cell = (art, n, name, i) => `<div class="gift" style="animation-delay:${0.35 + i * 0.22}s">${art}<strong>+${n}</strong>${name}</div>`;
+    $("c-box").classList.add("open"); snd.play("gift"); buzz(30); confetti();
+    $("c-say").textContent = "İçinden çıkanlar";
+    $("c-loot").innerHTML = cell(COIN, loot.tokens, "Jeton", 0) + loot.boosters.map((k, i) => cell(icon(k), 1, BOOSTERS[k].name, i + 1)).join("");
+    $("c-ok").hidden = false; $("c-ok").focus();
+  };
+  $("c-ok").onclick = () => { const next = pendingChests()[0]; if (next) chestCard(next); else { closeCard(); renderLanding(); } };
+}
+function questCard() {
+  const m = meta(), all = QUEST_KEYS.every((k) => m.q.got[k]);
+  card(`<h2>Günün görevleri</h2><p>Her gün üç yeni görev. Üçünün de ödülünü alınca Görev sandığı açılır.</p>
+    <div class="quests">${QUEST_KEYS.map((k) => { const [text, need, tok] = Meta.QUESTS[k], p = Math.min(need, m.q.p[k] || 0), got = m.q.got[k];
+      return `<div class="${got ? "got" : ""}"><span><strong>${text.replace("{n}", need)}</strong><i class="pbar"><i style="width:${(p / need) * 100}%"></i></i></span>${got ? "<em>Alındı</em>" : p >= need ? `<button class="b3 green" data-q="${k}">${COIN}+${tok}</button>` : `<em>${p} / ${need}</em>`}</div>`; }).join("")}</div>
+    ${all && !m.q.chest ? `<button class="b3 xl" id="q-chest">Görev sandığını aç</button>` : ""}<button class="b3 ghost" id="q-close">Kapat</button>`);
+  $("ov").querySelectorAll("[data-q]").forEach((b) => (b.onclick = () => { m.q.got[b.dataset.q] = true; m.tokens += Meta.QUESTS[b.dataset.q][2]; saveProfile(); snd.play("gift"); questCard(); }));
+  if ($("q-chest")) $("q-chest").onclick = () => chestCard("quest");
+  $("q-close").onclick = () => { closeCard(); renderLanding(); };
+}
+function weekPrize() { // shown on the first visit of a new week
+  if (!profile || $("landing").hidden || !$("ov").hidden) return false;
+  const r = rollWeek(); if (!r) return false;
+  saveProfile();
+  card(`<span class="badge">Haftalık lig</span><h2>Geçen hafta ${r.rank}. oldun</h2><p>${r.pts} puanla ${r.n > 1 ? "iki Lig sandığı" : "bir Lig sandığı"} kazandın.</p><button class="b3 xl" id="w-open">Sandığı aç</button>`);
+  $("w-open").onclick = () => chestCard("league");
+  return true;
+}
+setInterval(() => { // the free chest's countdown on the home screen
+  const el = $("l-free-t"); if (!el || !profile || $("landing").hidden) return;
+  const left = meta().freeAt - Date.now();
+  if (left > 0) el.textContent = hms(left); else if (el.textContent !== "Aç!") renderLanding();
+}, 1000);
+
+// ---- win streak: every level passed in a row adds a special letter to the next start; leaving a started level ends it ----
+function abandon() { if (G && G.mode === "level" && !G.ended && G.score > 0 && profile && meta().ws) { meta().ws = 0; saveProfile(); } }
+function streakTiles(grid, n) {
+  const plain = grid.map((t, i) => (Core.kindOf(t) ? -1 : i)).filter((i) => i >= 0);
+  Meta.STREAK.slice(0, n).forEach((mark) => { if (!plain.length) return; const i = plain.splice(Math.floor(Math.random() * plain.length), 1)[0]; grid[i] = mark === "?" ? "?" : Core.letterOf(grid[i]) + mark; });
+}
+
 // ---- home: the current world as a backdrop, one big play button ----
 function landing() {
   const world = profile ? worldOf(nextLevel()) : 0;
@@ -275,25 +380,35 @@ function landing() {
     };
     return;
   }
-  renderLanding(); cloudSync().then(() => { renderLanding(); dailyReward(); });
+  renderLanding(); cloudSync().then(() => { settleDuels(); renderLanding(); if (!weekPrize()) dailyReward(); });
 }
 const streakOn = () => profile.streak && (profile.streak.last === TODAY || profile.streak.last === YESTERDAY);
 function renderLanding() {
   if ($("landing").hidden || !profile) return;
-  const n = nextLevel(), done = Object.keys(profile.stars).length, w = worldOf(n), stat = (v, label) => `<div><strong>${v}</strong><small>${label}</small></div>`;
+  const n = nextLevel(), w = worldOf(n), m = meta(), cups = cupsOf(profile), t = Meta.tierOf(cups), pend = pendingChests(), freeLeft = m.freeAt - Date.now(), ws = Math.min(Meta.STREAK.length, m.ws || 0);
+  const qGot = QUEST_KEYS.filter((k) => m.q.got[k]).length, qReady = QUEST_KEYS.some((k) => !m.q.got[k] && (m.q.p[k] || 0) >= Meta.QUESTS[k][1]);
+  const inbox = duelsOf().filter((d) => d.b === profile.id && d.sb == null).length;
   $("homemid").innerHTML = ""; $("homesheet").classList.add("has-face");
   $("homesheet").innerHTML = `<button class="facebtn" id="l-face" aria-label="Karakterini ya da fotoğrafını değiştir">${avatar(profile)}<i>${svgIcon(ICONS.edit)}</i></button>
-    <div class="whoami"><small>Merhaba</small><strong>${esc(profile.name)}</strong>${isAdmin() ? "<em>admin</em>" : ""}</div>
+    <div class="whoami"><small>Merhaba</small><strong>${esc(profile.name)}</strong>${isAdmin() ? "<em>admin</em>" : ""}
+      <div class="pills"><button class="pill" id="l-tier" aria-label="Kademe ${Meta.TIERS[t][0]}, ${cups} kupa">${tierBadge(t)}${Meta.TIERS[t][0]} · ${cups}</button><span class="pill" aria-label="${isAdmin() ? "Sınırsız" : m.tokens} jeton">${COIN}${isAdmin() ? "∞" : m.tokens}</span><span class="pill" aria-label="${totalStars()} yıldız"><b>★</b>${totalStars()}</span></div></div>
     <div class="prog"><span>${Core.BIOMES[w]} dünyası</span><div><i style="width:${(n % 10) * 10}%"></i></div><span>${n % 10} / 10</span></div>
-    <button class="b3 xl" id="l-go">OYNA · Bölüm ${n + 1}</button>
-    <div class="stats">${stat(totalStars(), "Yıldız")}${stat(done, "Bölüm")}${stat(streakOn() ? profile.streak.n : 0, "Gün serisi")}${stat(profile.week && profile.week.id === WEEK ? profile.week.pts : 0, "Lig puanı")}</div>
+    <button class="b3 xl" id="l-go">OYNA · Bölüm ${n + 1}${ws ? `<i class="ws" aria-label="Galibiyet serisi ${ws}">${svgIcon(ICONS.flame)}×${ws}</i>` : ""}</button>
+    <div class="acts">
+      <button class="act${freeLeft <= 0 ? " ready" : ""}" id="l-free">${chestIcon("free")}<span>Bedava sandık</span><b id="l-free-t">${freeLeft <= 0 ? "Aç!" : hms(freeLeft)}</b></button>
+      <button class="act${pend.length ? " ready" : ""}" id="l-box">${chestIcon(pend[0] || "star")}<span>${pend.length ? Meta.CHESTS[pend[0]][0] : "Yıldız sandığı"}</span><b>${pend.length > 1 ? pend.length + " sandık" : pend.length ? "Aç!" : `★ ${totalStars() % Meta.STAR_STEP} / ${Meta.STAR_STEP}`}</b></button>
+      <button class="act${qReady ? " ready" : ""}" id="l-quest">${svgIcon(ICONS.quest)}<span>Görevler</span><b>${qReady ? "Ödül hazır" : `${qGot} / 3`}</b></button>
+    </div>
     <div class="tiles">
-      <button class="tilebtn" id="l-map">${svgIcon(ICONS.map)}Harita</button><button class="tilebtn" id="l-duel">${svgIcon(ICONS.duel)}Düello</button>
+      <button class="tilebtn" id="l-map">${svgIcon(ICONS.map)}Harita</button><button class="tilebtn" id="l-duel">${svgIcon(ICONS.duel)}Düello${inbox ? `<i class="dot" aria-label="${inbox} meydan okuma">${inbox}</i>` : ""}</button>
       <button class="tilebtn" id="l-rank">${svgIcon(ICONS.rank)}Sıralama</button><button class="tilebtn" id="l-help">${svgIcon(ICONS.help)}Nasıl?</button>
     </div>
-    <p class="cloudline">${cloudInfo}</p>`;
+    <p class="cloudline">${streakOn() ? `${profile.streak.n} günlük seri · ` : ""}${cloudInfo}</p>`;
   homeScene(w);
-  $("l-face").onclick = settings; $("l-go").onclick = () => intro(n); $("l-map").onclick = openMap; $("l-duel").onclick = startDuel; $("l-help").onclick = () => helpCard(null); $("l-rank").onclick = () => rankCard();
+  $("l-face").onclick = settings; $("l-go").onclick = () => intro(n); $("l-map").onclick = openMap; $("l-duel").onclick = duelHub; $("l-help").onclick = () => helpCard(null); $("l-rank").onclick = () => rankCard();
+  $("l-tier").onclick = () => rankCard("cups"); $("l-quest").onclick = questCard;
+  $("l-free").onclick = () => (meta().freeAt <= Date.now() ? chestCard("free") : toast(`Bedava sandık ${hms(meta().freeAt - Date.now())} sonra açılır`));
+  $("l-box").onclick = () => { const k = pendingChests()[0]; if (k) chestCard(k); else toast(`Yıldız sandığına ${Meta.STAR_STEP - (totalStars() % Meta.STAR_STEP)} yıldız kaldı`); };
 }
 // ---- daily reward: once a day, a 7-day cycle; a missed day starts the cycle again ----
 const DAILY = [["ipucu"], ["karistir"], ["yenile"], ["joker"], ["ipucu", "karistir"], ["yenile", "joker"], ["karistir", "yenile", "ipucu", "joker"]];
@@ -315,11 +430,12 @@ function rankCard(tab = "week") {
       rows: all.filter((p) => p.week && p.week.id === WEEK && p.week.pts > 0).map((p) => ({ p, v: p.week.pts, sub: `★ ${totalStars(p)}` })) },
     duel: { note: "Bugünkü Günlük Düello puanları. Herkes aynı harflerle oynar.", empty: "Bugün henüz düello oynayan yok. İlk sen ol.",
       rows: all.filter((p) => p.duel && p.duel.date === TODAY && p.duel.score > 0).map((p) => ({ p, v: p.duel.score, sub: "" })) },
+    cups: { note: "Düellolarda kazanılan kupalara göre. Kupalar kademeni belirler.", empty: "Henüz kupası olan yok. Bir düello kazan.", rows: all.filter((p) => cupsOf(p) > 0).map((p) => ({ p, v: cupsOf(p), sub: Meta.TIERS[Meta.tierOf(cupsOf(p))][0] })) },
     stars: { note: "Toplam yıldıza göre.", empty: "Henüz yıldız yok.", rows: all.map((p) => ({ p, v: totalStars(p), sub: `${nextLevel(p) + 1}. bölüm` })) },
   }, view = views[tab], rows = view.rows.sort((a, b) => b.v - a.v), top = rows.slice(0, 8), mine = rows.find((r) => r.p.id === profile.id);
   if (mine && !top.includes(mine)) top.push(mine);
   card(`<h2>Sıralama</h2>
-    <div class="tabs" role="tablist">${[["week", "Haftalık"], ["duel", "Düello"], ["stars", "Yıldız"]].map(([k, t]) => `<button role="tab" data-t="${k}" aria-selected="${k === tab}">${t}</button>`).join("")}</div>
+    <div class="tabs" role="tablist">${[["week", "Haftalık"], ["duel", "Düello"], ["cups", "Kupa"], ["stars", "Yıldız"]].map(([k, t]) => `<button role="tab" data-t="${k}" aria-selected="${k === tab}">${t}</button>`).join("")}</div>
     <p>${cloudPlayers ? view.note : "Bulut bağlı değil: yalnızca bu cihaz görünüyor."}</p>
     <div class="lb">${top.map((r) => `<div class="${r.p.id === profile.id ? "me" : ""}"><span>${rows.indexOf(r) + 1}</span><span class="who">${avatar(r.p)}<span>${esc(r.p.name)}</span></span><small>${r.sub}</small><strong>${tab === "stars" ? "★ " : ""}${r.v}</strong></div>`).join("") || `<p>${view.empty}</p>`}</div>
     <button class="b3 ghost" id="r-close">Kapat</button>`);
@@ -341,6 +457,7 @@ function settings() {
     <p style="font-size:.78rem">${cloudInfo}</p>
     ${isAdmin() ? `<div class="admin"><h3>Admin</h3><p>Tüm bölümler açık, güçlendiriciler sınırsız.</p>
       <div class="row2"><input class="field-in" id="a-lvl" type="number" min="1" value="${nextLevel() + 1}" aria-label="Bölüm numarası"><button class="b3 ghost" id="a-go">Bölüme git</button></div>
+      <div class="row2"><button class="b3 ghost" id="a-cup">+100 kupa</button><button class="b3 ghost" id="a-chest">Sandığı hazırla</button></div><button class="b3 ghost" id="a-quest">Görevleri tamamla</button>
       <p>Buluttaki oyuncular: ${cloudPlayers ? Object.values(cloudPlayers).map((p) => `${esc(p.name)} (★${totalStars(p)})`).join(", ") || "yok" : "bağlantı yok"}</p></div>` : ""}
     <button class="b3 red" id="s-reset">İlerlemeyi sıfırla</button>
     <button class="b3 ghost" id="s-close">Kapat</button>`);
@@ -364,7 +481,13 @@ function settings() {
     else { b.dataset.sure = "1"; b.textContent = "Emin misin? Bütün yıldızların silinir. Tekrar bas."; }
   };
   $("s-close").onclick = () => { closeCard(); if (G && !$("app").hidden) busy = false; };
-  if (isAdmin()) $("a-go").onclick = () => { const n = Math.max(1, parseInt($("a-lvl").value, 10) || 1) - 1; closeCard(); intro(n); };
+  if (isAdmin()) {
+    const did = (text) => { saveProfile(); toast(text); renderLanding(); };
+    $("a-go").onclick = () => { const n = Math.max(1, parseInt($("a-lvl").value, 10) || 1) - 1; closeCard(); intro(n); };
+    $("a-cup").onclick = () => { meta().cups = cupsOf(profile) + 100; did("+100 kupa"); };
+    $("a-chest").onclick = () => { meta().freeAt = 0; did("Bedava sandık hazır"); };
+    $("a-quest").onclick = () => { QUEST_KEYS.forEach((k) => (meta().q.p[k] = Meta.QUESTS[k][1])); did("Görevler tamamlandı: ödüllerini al"); };
+  }
 }
 
 // ---- saga map: one illustrated landscape, worlds blending into each other, level 1 at the bottom ----
@@ -452,12 +575,12 @@ function goalRows(L, left, brief) { // brief: the demo next to it does the expla
   return `<div class="goallist">${L.goals.map((g) => { const o = goalOf(g.type); return `<div>${o.svg}<span><strong>${o.name}: ${left ? Math.max(0, left[g.type]) + " kaldı" : g.need}</strong>${brief ? "" : o.how}</span></div>`; }).join("")}</div>`;
 }
 function intro(n) {
-  const L = Core.levelDef(n), theme = L.joker ? JOKER_THEME : THEMES[L.world], rec = recordOf(n), newWorld = n % 10 === 0 && n > 0;
+  const L = Core.levelDef(n), theme = L.joker ? JOKER_THEME : THEMES[L.world], rec = recordOf(n), newWorld = n % 10 === 0 && n > 0, ws = L.joker ? 0 : Math.min(Meta.STREAK.length, meta().ws || 0);
   card(`<div class="lvlhead">${L.joker ? `<span class="badge">Joker bölümü</span>` : newWorld ? `<span class="badge plain">Yeni dünya · yeni engel</span>` : ""}<h2>Bölüm ${n + 1}</h2><p>${L.joker ? "Bol joker ve altın harf, ekstra hediye" : `${L.biome} dünyası`} · ${L.moves} hamle</p></div>
     ${n % 10 === 0 ? goalRows(L, null, true) + demoHTML(L.goals[0].type) : goalRows(L)}
     <div class="stars">${[1, 2, 3].map((k) => star(k <= (profile.stars[n] || 0), 34)).join("")}</div>
     <p class="rec">${rec ? (rec.me ? `Rekor sende: ${rec.score} puan` : `Rekor: ${esc(rec.name)} · ${rec.score} puan`) : "Bu bölümde henüz rekor yok"}</p>
-    <p>Hepsini bitir ★★★ · %70 ★★ · %40 ★</p>
+    ${ws ? `<p class="wsline">${svgIcon(ICONS.flame)}Galibiyet serisi ×${ws}: ${["joker", "joker ve altın harf", "joker, altın ve bomba harfi"][ws - 1]} ile başlıyorsun</p>` : "<p>Hepsini bitir ★★★ · %70 ★★ · %40 ★</p>"}
     <button class="b3 xl green" id="i-go">Başla</button><button class="b3 ghost" id="i-back">Vazgeç</button>`, theme);
   $("i-go").onclick = () => startLevel(n); $("i-back").onclick = closeCard; playDemo();
 }
@@ -485,42 +608,60 @@ function baseState(L, rnd, mode) {
   return { mode, L, rnd, grid: Core.freshGrid(rnd, { rates: L.rates, ensure: Core.ensureFor(left) }), board: L.board.slice(), hand: [], score: 0, moves: L.moves, left, shown: { ...left },
     combo: 0, chain: 0, lastWordAt: -1e9, colorTurn: 0, running: false, timeLeft: DUEL_SECONDS, extended: false, rival: null, extraMoves: 0, rec: null, passed: false, tickAt: 11 };
 }
-function startLevel(n) { G = baseState(Core.levelDef(n), Math.random, "level"); G.rec = recordOf(n); openScreen(); }
-function startDuel() {
-  const r = Core.rngFrom(TODAY + ":duel");
-  G = baseState({ n: -1, world: 5, biome: "Düello", goals: [], board: Core.emptyBoard(), moves: Infinity, plantRate: 0.5, rates: Core.BASE_RATES }, r, "duel");
-  G.rival = makeRival(); G.running = true; openScreen();
+function startLevel(n) {
+  abandon();
+  G = baseState(Core.levelDef(n), Math.random, "level"); G.rec = recordOf(n);
+  if (!G.L.joker) streakTiles(G.grid, Math.min(Meta.STREAK.length, meta().ws || 0));
+  openScreen();
+}
+// A duel is two minutes on an empty board. "daily": everyone gets the day's letters. "send": I play first and my run becomes a challenge for the player `arg`.
+// "answer": I play the letters of the challenge record `arg` against the recording of the challenger's run.
+function startDuel(kind = "daily", arg) {
+  const seed = kind === "daily" ? TODAY + ":duel" : kind === "send" ? `vs:${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}` : arg.seed;
+  G = baseState({ n: -1, world: 5, biome: "Düello", goals: [], board: Core.emptyBoard(), moves: Infinity, plantRate: 0.5, rates: Core.BASE_RATES }, Core.rngFrom(seed), "duel");
+  G.duel = { kind, seed, arg }; G.run = []; G.elapsed = 0;
+  G.rival = kind === "daily" ? makeRival() : kind === "answer" ? ghostRival(arg.an, arg.sa, arg.ra, playerOf(arg.a, arg.an)) : { name: arg.name, target: 0, who: arg, later: true, at: () => 0 };
+  busy = true;
+  card(`<div class="vsintro">${avatar(profile)}<b>VS</b>${avatar(G.rival.who || { name: G.rival.name })}</div><h2>${esc(profile.name)} – ${esc(G.rival.name)}</h2>
+    <p>${kind === "send" ? `Önce sen oyna. Puanın ${esc(arg.name)} için meydan okuma olur; o da aynı harflerle oynar.` : kind === "answer" ? `${esc(arg.an)} bu harflerle ${arg.sa} puan yaptı. Onun oyununun kaydına karşı oynuyorsun.`
+      : G.rival.real ? `${esc(G.rival.name)} bugün oynadı. Onun puanına karşı oynuyorsun.` : "Bugün henüz oynayan yok; rakibin bir simülasyon."}</p>`);
+  snd.play("big");
+  setTimeout(() => { if (G && G.duel && G.duel.seed === seed && !G.running) { G.running = true; openScreen(); } }, RM ? 700 : 1900);
 }
 function openScreen() {
   closeCard(); show("game", G.L.world); path = []; hintPath = [];
   const theme = G.mode === "duel" ? DUEL_THEME : G.L.joker ? JOKER_THEME : THEMES[G.L.world];
   paintScene($("gamebg"), G.L.world);
   $("field").style.setProperty("--c1", theme[0]); $("field").style.setProperty("--c2", theme[1]);
-  $("tagline").innerHTML = G.mode === "duel" ? "Günlük Düello" : `<b>Bölüm ${G.L.n + 1}</b>${G.L.joker ? "Joker" : G.L.biome}`;
+  $("tagline").innerHTML = G.mode === "duel" ? (G.duel.kind === "daily" ? "Günlük Düello" : "Meydan okuma") : `<b>Bölüm ${G.L.n + 1}</b>${G.L.joker ? "Joker" : G.L.biome}`;
   $("help").hidden = G.mode === "duel"; $("back").setAttribute("aria-label", G.mode === "duel" ? "Ana ekran" : "Haritaya dön");
   busy = false; lastTick = performance.now();
   say(G.mode === "duel" ? "Süre başladı. Ne kadar çok puan, o kadar iyi." : "Harfleri kaydırıp kelime yaz", "msg");
   buildTiles(true); buildBoard(); renderHand(); renderGoals(); renderBoosters(); renderTop(); snd.play("start");
 }
-// Today's rival: the best real player who already played today's duel, else a simulated one. Either way the score climbs along a seeded curve.
-// shortcut: a real rival's curve is made up (only the final score is theirs); record whole runs once there is a backend.
+// The daily rival: the best real player who already played today, else a simulated one. A real rival's score follows the recording of that run when there is one.
+// shortcut: without a recording (an older save) the real rival's curve is made up and only the final score is theirs.
+const ghostRival = (name, target, run, who) => { const tg = Math.max(0, Math.round(+target) || 0); return { name, target: tg, real: true, who, at: (t) => (t >= DUEL_SECONDS ? tg : Math.min(tg, Meta.ghostAt(run, t))) }; };
 function makeRival() {
   const r = Core.rngFrom(TODAY + ":rakip"), fake = NAMES[Math.floor(r() * NAMES.length)], fakeTarget = 700 + Math.floor(r() * 600);
   const real = others().filter((p) => p.duel && p.duel.date === TODAY && p.duel.score > 0).sort((a, b) => b.duel.score - a.duel.score)[0];
+  const run = real ? Meta.cleanRun(real.duel.run) : [];
+  if (run.length > 2) return ghostRival(real.name, real.duel.score, run, real);
   const name = real ? real.name : fake, target = real ? real.duel.score : fakeTarget;
   const cum = [0]; for (let i = 0; i < 40; i++) cum.push(cum[i] + 0.3 + r() * 1.4 * (i > 30 ? 1.4 : 1));
-  return { name, target, real: !!real, at: (t) => { const x = Math.min(40, (t / DUEL_SECONDS) * 40), i = Math.floor(x), f = x - i; const v = i >= 40 ? cum[40] : cum[i] + (cum[i + 1] - cum[i]) * f; return Math.round((v / cum[40]) * target); } };
+  return { name, target, real: !!real, who: real, at: (t) => { const x = Math.min(40, (t / DUEL_SECONDS) * 40), i = Math.floor(x), f = x - i; const v = i >= 40 ? cum[40] : cum[i] + (cum[i + 1] - cum[i]) * f; return Math.round((v / cum[40]) * target); } };
 }
 let lastTick = performance.now();
 setInterval(() => {
   const t = performance.now(), dt = (t - lastTick) / 1000; lastTick = t;
   if (!G || !G.running || busy) return;
-  G.timeLeft = Math.max(0, G.timeLeft - dt); renderTop(); renderGoals();
+  G.elapsed = (G.elapsed || 0) + dt; G.timeLeft = Math.max(0, G.timeLeft - dt); renderTop(); renderGoals();
   const s = Math.ceil(G.timeLeft); if (s < G.tickAt && s > 0) { G.tickAt = s; snd.play("duelTick", s); }
   if (G.timeLeft <= 0) { G.running = false; timeUp(); }
 }, 100);
 function addScore(p) { // every point also counts down a joker level's score goal
   G.score += p;
+  if (G.mode === "duel" && G.run) G.run.push([Math.round(G.elapsed || 0), G.score]); // the recording a rival will play against
   if (G.left.score > 0) { G.left.score = Math.max(0, G.left.score - p); G.shown.score = G.left.score; renderGoals(); }
   if (G.rec && !G.rec.me && !G.passed && G.score > G.rec.score) { G.passed = true; toast(`${G.rec.name} geride kaldı: ${G.rec.score} puanı geçtin`); snd.play("record"); }
   renderTop();
@@ -635,7 +776,7 @@ function renderGoals() {
   if (G.mode === "duel") {
     const el = Math.min(DUEL_SECONDS, DUEL_SECONDS - G.timeLeft), rv = G.rival.at(el), top = Math.max(G.score, rv, G.rival.target, 1);
     if (!box.querySelector(".duel")) box.innerHTML = `<div class="duel"><div class="row"><span>Sen</span><div class="bar"><i id="bar-me"></i></div><span id="sc-me"></span></div><div class="row"><span>${esc(G.rival.name)}</span><div class="bar rival"><i id="bar-rv"></i></div><span id="sc-rv"></span></div></div>`;
-    $("sc-me").textContent = G.score; $("sc-rv").textContent = rv; $("bar-me").style.width = (G.score / top) * 100 + "%"; $("bar-rv").style.width = (rv / top) * 100 + "%";
+    $("sc-me").textContent = G.score; $("sc-rv").textContent = G.rival.later ? "–" : rv; $("bar-me").style.width = (G.score / top) * 100 + "%"; $("bar-rv").style.width = (rv / top) * 100 + "%";
     return;
   }
   box.innerHTML = G.L.goals.map((g) => { const o = goalOf(g.type); return `<div class="goal${G.shown[g.type] ? "" : " done"}" data-g="${g.type}" aria-label="${o.name}: ${G.shown[g.type]} kaldı">${o.svg}<span>${G.shown[g.type] || "✓"}</span></div>`; }).join("");
@@ -721,6 +862,7 @@ function endSwipe() {
   const t = performance.now(); G.chain = t - G.lastWordAt < CHAIN_MS ? Math.min(5, G.chain + 1) : 1; G.lastWordAt = t;
   const pts = Core.wordPoints(w, piece, G.chain);
   snd.play("word", w.length, G.chain); if (piece.gold) snd.play("gold");
+  quest("words"); if (w.length >= 5) quest("long"); if (piece.gold) quest("gold", piece.gold);
   if (G.mode === "level") { G.moves--; bump($("moves")); }
   const spots = (kind) => used.filter((i) => Core.kindOf(G.grid[i]) === kind).map((i) => centerOf(tiles[i].el)), pr = Core.wordProgress(w, piece);
   if (pr.crystal) { credit("crystal", pr.crystal, spots("crystal")); snd.play("crystal"); }
@@ -794,6 +936,7 @@ async function placeBlock(k, p, at) {
 function cheer(res, p, at) { // everything you hear and feel when a placement clears something
   buzz(res.bombed.length || res.blasts.length ? 45 : res.lines >= 2 ? 25 : 12);
   if (res.lines) snd.play("clear", res.lines, G.combo);
+  if (res.lines) { quest("lines", res.lines); if (G.combo >= 2) quest("combo"); } if (res.broken.length) quest("breakOb", res.broken.length);
   if (res.bombed.length) { const [x, y] = centerOf(cellEls[(at[0] + p.cells[p.bombIdx][0]) * B + at[1] + p.cells[p.bombIdx][1]]); shockwave(x, y); shake(10); burst(x, y, "#FFD27A", 30, 1.2); snd.play("boom"); }
   else if (res.blasts.length) shake(8); else if (res.lines >= 2) shake(3 + res.lines * 2);
   for (const i of res.blasts) { const [x, y] = centerOf(cellEls[i]); shockwave(x, y); burst(x, y, "#FFD27A", 24, 1.1); }
@@ -875,7 +1018,16 @@ function useBooster(k) {
     afterTurn();
   };
   if (isAdmin()) return apply();
-  if (inv()[k] > 0) { inv()[k]--; saveProfile(); renderBoosters(); apply(); } else fakeAd(() => { renderBoosters(); apply(); });
+  if (inv()[k] > 0) { inv()[k]--; saveProfile(); renderBoosters(); apply(); } else needBooster(k, apply);
+}
+function needBooster(k, apply) { // none left: buy one with tokens, or watch an ad
+  if (!canPay(Meta.COST.booster)) return fakeAd(() => { renderBoosters(); apply(); });
+  busy = true;
+  card(`<h2>${BOOSTERS[k].name} kalmadı</h2>${purse()}<button class="b3 xl" id="b-tok">${COIN}${Meta.COST.booster} jetonla al</button><button class="b3 blue" id="b-ad">▶ Reklam izle</button><button class="b3 ghost" id="b-no">Vazgeç</button>`);
+  const back = () => { closeCard(); busy = false; lastTick = performance.now(); };
+  $("b-tok").onclick = () => { if (spend(Meta.COST.booster)) { back(); renderBoosters(); apply(); } };
+  $("b-ad").onclick = () => fakeAd(() => { renderBoosters(); apply(); });
+  $("b-no").onclick = back;
 }
 function fakeAd(reward) {
   busy = true;
@@ -901,8 +1053,11 @@ function outOfMoves() {
   card(`<h2>Hamle bitti</h2><div class="stars">${[1, 2, 3].map((k) => star(k <= s, 40)).join("")}</div>${partialRows()}
     <p>${s ? `${s} yıldızla geçebilirsin. 5 hamle daha ile üç yıldız alabilirsin.` : "Geçmek için hedeflerin en az %40'ı lazım."}</p>
     <button class="b3 xl" id="o-ad">▶ Reklam izle: +5 hamle</button>
+    ${canPay(Meta.COST.moves) ? `<button class="b3 blue" id="o-tok">${COIN}${Meta.COST.moves} jeton: +5 hamle</button>${purse()}` : ""}
     ${s ? `<button class="b3 green" id="o-take">${s} yıldızla bitir</button>` : `<button class="b3 blue" id="o-retry">Yeniden başla</button>`}<button class="b3 ghost" id="o-map">Harita</button>`);
-  $("o-ad").onclick = () => fakeAd(() => { G.moves += 5; G.extraMoves += 5; renderTop(); bump($("moves")); afterTurn(); });
+  const more = () => { G.moves += 5; G.extraMoves += 5; renderTop(); bump($("moves")); afterTurn(); };
+  $("o-ad").onclick = () => fakeAd(more);
+  if ($("o-tok")) $("o-tok").onclick = () => { if (spend(Meta.COST.moves)) { closeCard(); busy = false; more(); } };
   if (s) $("o-take").onclick = () => levelEnd(s, false); else $("o-retry").onclick = () => startLevel(G.L.n);
   $("o-map").onclick = openMap;
 }
@@ -911,8 +1066,11 @@ function noRoom() {
   const canDiscard = G.hand.length > 0, s = G.mode === "level" ? Core.starsFor(G.L, G.left) : 0;
   card(`<h2>Yer kalmadı</h2><p>Tahtada bu blokları koyacak yer yok.</p>${G.mode === "level" ? partialRows() : ""}
     <button class="b3 xl" id="o-ad">▶ Reklam izle: ${canDiscard ? "bloklarını at" : "yeni harfler al"}</button>
+    ${canPay(Meta.COST.rescue) ? `<button class="b3 blue" id="o-tok">${COIN}${Meta.COST.rescue} jeton: ${canDiscard ? "bloklarını at" : "yeni harfler al"}</button>${purse()}` : ""}
     ${G.mode === "duel" ? `<button class="b3 blue" id="o-end">Bitir</button>` : s ? `<button class="b3 green" id="o-take">${s} yıldızla bitir</button>` : `<button class="b3 blue" id="o-retry">Yeniden başla</button>`}<button class="b3 ghost" id="o-map">${G.mode === "duel" ? "Ana ekran" : "Harita"}</button>`);
-  $("o-ad").onclick = () => fakeAd(() => { if (canDiscard) { G.hand = []; renderHand(); } else { G.grid = Core.freshGrid(G.rnd, { rates: G.L.rates, ensure: Core.ensureFor(G.left) }); respinTiles(); } afterTurn(); });
+  const rescue = () => { if (canDiscard) { G.hand = []; renderHand(); } else { G.grid = Core.freshGrid(G.rnd, { rates: G.L.rates, ensure: Core.ensureFor(G.left) }); respinTiles(); } afterTurn(); };
+  $("o-ad").onclick = () => fakeAd(rescue);
+  if ($("o-tok")) $("o-tok").onclick = () => { if (spend(Meta.COST.rescue)) { closeCard(); busy = false; lastTick = performance.now(); rescue(); } };
   if ($("o-end")) $("o-end").onclick = finishDuel; if ($("o-take")) $("o-take").onclick = () => levelEnd(s, false); if ($("o-retry")) $("o-retry").onclick = () => startLevel(G.L.n);
   $("o-map").onclick = G.mode === "duel" ? landing : openMap;
 }
@@ -924,13 +1082,17 @@ function levelEnd(stars, finishedAll) {
   if (L.joker && !prev) gifts.push(...["karistir", "yenile", "ipucu", "joker"].sort(() => Math.random() - 0.5).slice(0, 2)); // joker levels give two extra gifts the first time
   gifts.forEach((k) => inv()[k]++);
   const gain = Math.max(0, final - prevBest), beat = rec && !rec.me && final > rec.score; addWeek(gain);
+  const m = meta(), tok = stars > prev ? (stars - prev) * Meta.PAY.star : Meta.PAY.replay; // new stars pay; a replay pays a little
+  G.ended = true; m.tokens += tok; m.ws = Math.min(Meta.STREAK.length, (m.ws || 0) + 1); quest("win"); if (stars === 3) quest("three");
   profile.stars[L.n] = Math.max(prev, stars); profile.best[L.n] = Math.max(prevBest, final); saveProfile(); renderBoosters();
+  const chestLine = pendingChests().length ? "Sandığın hazır: ana ekranda aç" : `Yıldız sandığı ★ ${totalStars() % Meta.STAR_STEP} / ${Meta.STAR_STEP}`;
   confetti(); snd.play("win", stars); for (let s = 1; s <= stars; s++) setTimeout(() => snd.play("star", s), 200 + (s - 1) * 250); if (beat) setTimeout(() => snd.play("record"), 1200);
   const recLine = beat ? `${esc(rec.name)} geride kaldı: bu bölümün rekoru artık sende!` : rec && !rec.me ? `Rekor hâlâ ${esc(rec.name)}'de: ${rec.score} puan` : prevBest && gain ? "Kendi rekorunu geçtin" : "";
   card(`<div class="lvlhead"><div class="stars">${[1, 2, 3].map((s, i) => star(s <= stars).replace("<svg", `<svg style="animation-delay:${0.2 + i * 0.25}s"`)).join("")}</div>
     <h2>Bölüm ${L.n + 1} ${stars === 3 ? "tamam!" : "geçildi"}</h2></div><div class="big" id="o-score">${G.score}</div>
     <p>${finishedAll ? (G.moves ? `Kalan ${G.moves} hamle × 20 = +${bonus}` : "Son hamlede bitirdin.") : `Hedeflerin bir kısmı kaldı. Tekrar oynayıp ${stars + 1}. yıldızı alabilirsin.`}</p>
     ${recLine ? `<p class="rec">${recLine}</p>` : ""}${gain ? `<p>Haftalık lig: +${gain} puan</p>` : ""}
+    <p class="earn">${COIN}+${tok} jeton · <span class="fl">${svgIcon(ICONS.flame)}</span>Seri ×${m.ws} · ${chestLine}</p>
     ${gifts.length ? `<h3>Hediyeler</h3><div class="gifts">${gifts.map((k, i) => `<div class="gift" style="animation-delay:${0.9 + i * 0.18}s">${icon(k)}<strong>+1</strong>${BOOSTERS[k].name}</div>`).join("")}</div>` : `<p>Bu yıldızların hediyelerini almıştın. Daha çok yıldız, daha çok hediye.</p>`}
     <button class="b3 xl green" id="o-next">Sonraki bölüm</button><div class="row2"><button class="b3 ghost" id="o-again">Tekrar</button><button class="b3 ghost" id="o-map">Harita</button></div>`, L.joker ? JOKER_THEME : THEMES[L.world]);
   const sc = $("o-score"), t0 = performance.now(); // count the move bonus up
@@ -939,7 +1101,7 @@ function levelEnd(stars, finishedAll) {
 }
 function timeUp() {
   busy = true; snd.play("duelEnd");
-  if (G.extended) return finishDuel();
+  if (G.extended || G.duel.kind !== "daily") return finishDuel(); // only the daily duel sells extra time: a challenge has to be the same two minutes for both
   const rv = G.rival.at(DUEL_SECONDS);
   card(`<h2>Süre bitti</h2><div class="vs"><div class="${G.score > rv ? "win" : ""}"><strong>${G.score}</strong><span>Sen</span></div><p>–</p><div class="${rv >= G.score ? "win" : ""}"><strong>${rv}</strong><span>${esc(G.rival.name)}</span></div></div>
     <p>${G.score > rv ? "Öndesin. Bitir ve kazan." : `Rakibi geçmek için ${rv - G.score + 1} puan lazım.`}</p>
@@ -947,20 +1109,98 @@ function timeUp() {
   $("o-end").onclick = finishDuel;
   $("o-ad").onclick = () => fakeAd(() => { G.extended = true; G.timeLeft = 15; G.tickAt = 11; G.running = true; });
 }
+// the only things players can say to each other: one of the fixed lines in Meta.QUICK, stored as its number
+const quickRow = () => `<div class="quick" role="group" aria-label="Kısa mesaj">${Meta.QUICK.map((q, i) => `<button data-m="${i}" aria-pressed="false">${q}</button>`).join("")}</div>`;
+function quickBind(pick) {
+  const all = $("ov").querySelectorAll(".quick button");
+  all.forEach((b) => (b.onclick = () => { const on = b.getAttribute("aria-pressed") !== "true"; all.forEach((x) => x.setAttribute("aria-pressed", "false")); b.setAttribute("aria-pressed", on); pick(on ? +b.dataset.m : null); }));
+}
 function finishDuel() {
   busy = true; G.running = false;
-  const rv = G.rival.at(DUEL_SECONDS), win = G.score > rv, before = profile.duel && profile.duel.date === TODAY ? profile.duel.score : 0, gain = Math.max(0, G.score - before);
-  addWeek(gain); profile.duel = { date: TODAY, score: Math.max(before, G.score) }; profile.duelBest = Math.max(profile.duelBest || 0, G.score); saveProfile();
+  const { kind, arg, seed } = G.duel, m = meta(), score = G.score, run = G.run.slice(0, 150);
+  quest("duel");
+  if (kind === "send") { // my run becomes the challenge
+    const id = `${profile.id}>${arg.id}:${Date.now().toString(36)}`; let msg = null;
+    m.tokens += Meta.PAY.duelPlay; saveProfile(); snd.play("goalDone");
+    card(`<h2>${score} puan</h2><div class="vsintro small">${avatar(profile)}<b>→</b>${avatar(arg)}</div>
+      <p>${esc(arg.name)} aynı harflerle oynayınca sonuç belli olur. Kazanan ${Meta.CUP.win} kupa alır.</p>${quickRow()}
+      <button class="b3 xl green" id="o-send">Meydan okumayı gönder</button><button class="b3 ghost" id="o-home">Vazgeç</button>`);
+    quickBind((i) => (msg = i));
+    $("o-send").onclick = () => { duelOp(id, { id, a: profile.id, an: profile.name, b: arg.id, bn: arg.name, t: Date.now(), seed, sa: score, ra: run, ma: msg }); landing(); toast(`${arg.name} için meydan okuma gönderildi`); };
+    $("o-home").onclick = landing;
+    return;
+  }
+  const rv = kind === "daily" ? G.rival.at(DUEL_SECONDS) : arg.sa, diff = score - rv, win = diff > 0;
+  let counted = true, gain = 0;
+  if (kind === "daily") { // only the first match of the day moves trophies; a replay can still raise today's score
+    const before = profile.duel && profile.duel.date === TODAY ? profile.duel.score : 0; counted = !before; gain = Math.max(0, score - before); addWeek(gain);
+    if (score >= before) profile.duel = { date: TODAY, score, run }; profile.duelBest = Math.max(profile.duelBest || 0, score);
+  } else duelOp(arg.id, { sb: score, tb: Date.now(), bn: profile.name });
+  const cup = counted ? cupsChange(diff) : null, tok = win ? Meta.PAY.duelWin : Meta.PAY.duelPlay, tNow = Meta.tierOf(cupsOf(profile));
+  if (counted) m.tokens += tok;
+  saveProfile();
   if (win) { confetti(); snd.play("win", 3); } else snd.play("fail");
+  if (cup && cup.up) setTimeout(() => snd.play("record"), 900);
   const day = NOW.toLocaleDateString("tr-TR", { day: "numeric", month: "short" });
-  const share = `Shapeword Düello · ${day}\n${G.score} – ${rv} ${G.rival.name}\n${win ? "🏆 Kazandım" : "Bu sefer kaybettim"}${G.extended ? " (+15 sn)" : ""}`;
-  card(`<h2>${win ? "Kazandın!" : `${esc(G.rival.name)} kazandı`}</h2>
-    <div class="vs"><div class="${win ? "win" : ""}"><strong>${G.score}</strong><span>Sen</span></div><p>–</p><div class="${win ? "" : "win"}"><strong>${rv}</strong><span>${esc(G.rival.name)}</span></div></div>
-    <p>${G.rival.real ? `${esc(G.rival.name)} bugün gerçekten oynadı; bu onun puanı.` : "Bugün henüz başka oynayan yok; rakip simülasyondu."}${gain ? ` Haftalık lig: +${gain} puan.` : ""}</p>
-    <textarea class="share" id="o-share" rows="3" readonly aria-label="Paylaşım metni">${esc(share)}</textarea>
-    <button class="b3 blue" id="o-copy">Sonucu kopyala</button><div class="row2"><button class="b3 ghost" id="o-again">Tekrar</button><button class="b3 ghost" id="o-home">Ana ekran</button></div>`);
-  $("o-copy").onclick = () => navigator.clipboard.writeText(share).then(() => ($("o-copy").textContent = "Kopyalandı")).catch(() => { $("o-share").select(); $("o-copy").textContent = "Seçildi, kopyala"; });
-  $("o-again").onclick = startDuel; $("o-home").onclick = landing;
+  const share = `Shapeword Düello · ${day}\n${score} – ${rv} ${G.rival.name}\n${win ? "🏆 Kazandım" : "Bu sefer kaybettim"}${G.extended ? " (+15 sn)" : ""}`;
+  card(`<h2>${win ? "Kazandın!" : diff === 0 ? "Berabere" : `${esc(G.rival.name)} kazandı`}</h2>
+    <div class="vs"><div class="${win ? "win" : ""}">${avatar(profile)}<strong>${score}</strong><span>Sen</span></div><p>–</p><div class="${diff < 0 ? "win" : ""}">${avatar(G.rival.who || { name: G.rival.name })}<strong>${rv}</strong><span>${esc(G.rival.name)}</span></div></div>
+    ${cup && cup.up ? `<div class="rankup">${tierBadge(tNow)}<strong>${Meta.TIERS[tNow][0]} kademesine yükseldin!</strong><span>Kademe sandığın ana ekranda.</span></div>` : ""}
+    ${cup ? `<p class="cupline">${CUP}${cup.delta >= 0 ? "+" : ""}${cup.delta} kupa · ${tierBadge(tNow)}${Meta.TIERS[tNow][0]} ${cupsOf(profile)} · ${COIN}+${tok}</p>` : `<p>Kupa için günün ilk maçı sayılır; bu tekrar yalnızca bugünkü puanını yükseltir.</p>`}
+    <p>${kind === "answer" ? `${esc(arg.an)} sonucu oyuna bir sonraki girişinde görecek.` : G.rival.real ? `${esc(G.rival.name)} bugün gerçekten oynadı; bu onun puanı.` : "Bugün henüz başka oynayan yok; rakip simülasyondu."}${gain ? ` Haftalık lig: +${gain} puan.` : ""}</p>
+    ${kind === "answer" ? quickRow() : `<textarea class="share" id="o-share" rows="3" readonly aria-label="Paylaşım metni">${esc(share)}</textarea><button class="b3 blue" id="o-copy">Sonucu kopyala</button>`}
+    <div class="row2"><button class="b3 ghost" id="o-again">${kind === "answer" ? "Rövanş" : "Tekrar"}</button><button class="b3 ghost" id="o-home">Ana ekran</button></div>`);
+  if (kind === "answer") quickBind((i) => duelOp(arg.id, { mb: i }));
+  else $("o-copy").onclick = () => navigator.clipboard.writeText(share).then(() => ($("o-copy").textContent = "Kopyalandı")).catch(() => { $("o-share").select(); $("o-copy").textContent = "Seçildi, kopyala"; });
+  $("o-again").onclick = () => (kind === "answer" ? startDuel("send", playerOf(arg.a, arg.an)) : startDuel("daily")); $("o-home").onclick = landing;
+}
+
+// ---- challenges between players: one record each in the cloud save ----
+// shortcut: scores are whatever each player's device reports and writes are last-one-wins; a real backend has to referee before prizes depend on this.
+const playerOf = (id, name) => (cloudPlayers && Object.prototype.hasOwnProperty.call(cloudPlayers, id) && cloudPlayers[id]) || { id, name };
+function withOutbox(duels) { // my changes that the cloud has not confirmed yet, laid over what it holds
+  for (const o of (profile && profile.outbox) || []) if (o && typeof o.id === "string" && o.set && typeof o.set === "object") duels[o.id] = { ...(duels[o.id] || {}), ...o.set };
+  return duels;
+}
+function duelOp(id, set) { // a change to a challenge record: shown here at once, kept across reloads, carried to the cloud by the next save
+  (profile.outbox ||= []).push({ id, set }); cloudDuels = withOutbox(cloudDuels || {}); saveProfile();
+}
+// records as the page may use them: everything in the cloud save is someone else's data, so each field is checked and cut to size
+const duelsOf = () => Object.values(cloudDuels || {}).filter((d) => d && typeof d.id === "string" && typeof d.a === "string" && typeof d.b === "string" && typeof d.seed === "string" && Number.isFinite(+d.sa))
+  .map((d) => ({ id: d.id, a: d.a, b: d.b, seed: d.seed.slice(0, 80), an: String(d.an || d.a).slice(0, 16), bn: String(d.bn || d.b).slice(0, 16), t: +d.t || 0, tb: +d.tb || 0, sa: Math.max(0, Math.round(+d.sa)),
+    sb: d.sb == null || !Number.isFinite(+d.sb) ? null : Math.max(0, Math.round(+d.sb)), ra: Meta.cleanRun(d.ra), ma: Meta.quickIdx(d.ma), mb: Meta.quickIdx(d.mb), ca: !!d.ca }));
+function settleDuels() { // challenges I sent that were answered while I was away: each result counts once
+  if (!profile || isAdmin()) return;
+  const m = meta(), seen = (m.seen ||= {}), news = [];
+  for (const d of duelsOf()) if (d.a === profile.id && d.sb != null && !d.ca && !seen[d.id]) {
+    seen[d.id] = 1; const r = cupsChange(d.sa - d.sb); if (d.sa > d.sb) m.tokens += Meta.PAY.duelWin;
+    duelOp(d.id, { ca: true });
+    news.push(`${d.bn}: ${d.sa} – ${d.sb}, ${d.sa > d.sb ? "kazandın" : d.sa < d.sb ? "kaybettin" : "berabere"} (${r.delta >= 0 ? "+" : ""}${r.delta} kupa)`);
+  }
+  if (cloudDuels) for (const id of Object.keys(seen)) if (!cloudDuels[id]) delete seen[id];
+  if (news.length) { saveProfile(); toast(news.length === 1 ? `Meydan okuman cevaplandı. ${news[0]}` : `${news.length} meydan okuman cevaplandı. Düello ekranına bak.`); }
+}
+function duelHub() {
+  const cups = cupsOf(profile), t = Meta.tierOf(cups), next = Meta.TIERS[t + 1], me = profile.id, ds = duelsOf().sort((x, y) => y.t - x.t);
+  const inbox = ds.filter((d) => d.b === me && d.sb == null), asked = new Set(ds.filter((d) => d.a === me && d.sb == null).map((d) => d.b));
+  const done = ds.filter((d) => d.sb != null && (d.a === me || d.b === me)).sort((x, y) => y.tb - x.tb).slice(0, 4);
+  const foes = isAdmin() ? [] : others().sort((x, y) => cupsOf(y) - cupsOf(x) || totalStars(y) - totalStars(x)).slice(0, 6);
+  const today = profile.duel && profile.duel.date === TODAY ? profile.duel.score : 0;
+  const row = (p, sub, btn) => `<div>${avatar(p)}<span><strong>${esc(p.name || "?")}</strong><small>${sub}</small></span>${btn}</div>`;
+  card(`<h2>Düello</h2>
+    <div class="tierrow">${tierBadge(t)}<span><strong>${Meta.TIERS[t][0]} · ${cups} kupa</strong><i class="pbar"><i style="width:${next ? ((cups - Meta.TIERS[t][1]) / (next[1] - Meta.TIERS[t][1])) * 100 : 100}%"></i></i><small>${next ? `${next[0]} kademesine ${next[1] - cups} kupa` : "En üst kademedesin"}</small></span></div>
+    <button class="b3 xl" id="du-daily">Günlük düello</button>
+    <p>${today ? `Bugünkü puanın ${today}. Tekrar oynayıp yükseltebilirsin.` : `Herkes aynı harflerle 2 dakika oynar. Günün ilk maçında kazanan ${Meta.CUP.win} kupa alır, kaybeden ${Meta.CUP.loss} kupa verir.`}</p>
+    ${inbox.length ? `<h3>Sana meydan okuyanlar</h3><div class="duels">${inbox.map((d, i) => row(playerOf(d.a, d.an), d.ma == null ? "Seni bekliyor" : `“${Meta.QUICK[d.ma]}”`, `<button class="b3 green" data-in="${i}">Oyna</button>`)).join("")}</div>` : ""}
+    ${foes.length ? `<h3>Meydan oku</h3><div class="duels">${foes.map((p, i) => row(p, `${Meta.TIERS[Meta.tierOf(cupsOf(p))][0]} · ${cupsOf(p)} kupa`, asked.has(p.id) ? "<em>Bekleniyor</em>" : `<button class="b3 blue" data-foe="${i}">Meydan oku</button>`)).join("")}</div>`
+      : `<p>${isAdmin() ? "Admin hesabı yarışmaz; meydan okumak için başka bir isimle gir." : "Başka oyuncular oyuna girince burada onlara meydan okuyabilirsin."}</p>`}
+    ${done.length ? `<h3>Son maçlar</h3><div class="duels">${done.map((d) => { const mine = d.a === me ? d.sa : d.sb, theirs = d.a === me ? d.sb : d.sa, said = d.a === me ? d.mb : d.ma;
+      return row(d.a === me ? playerOf(d.b, d.bn) : playerOf(d.a, d.an), `${mine} – ${theirs}${said == null ? "" : ` · “${Meta.QUICK[said]}”`}`, `<em class="${mine > theirs ? "won" : mine < theirs ? "lost" : ""}">${mine > theirs ? "Kazandın" : mine < theirs ? "Kaybettin" : "Berabere"}</em>`); }).join("")}</div>` : ""}
+    <button class="b3 ghost" id="du-close">Kapat</button>`);
+  $("du-daily").onclick = () => startDuel("daily");
+  $("ov").querySelectorAll("[data-in]").forEach((b) => (b.onclick = () => startDuel("answer", inbox[+b.dataset.in])));
+  $("ov").querySelectorAll("[data-foe]").forEach((b) => (b.onclick = () => startDuel("send", foes[+b.dataset.foe])));
+  $("du-close").onclick = closeCard;
 }
 $("back").onclick = () => (G && G.mode === "duel" ? landing() : openMap());
 
