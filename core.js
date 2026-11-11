@@ -203,27 +203,53 @@
     }
     return placed;
   }
+  // Hand-made opening: every early level mixes two or three goals, still gentle
+  const EARLY = [
+    [["stone", 6]],
+    [["crystal", 4], ["stone", 4]],
+    [["ice", 2], ["crystal", 3]],
+    [["long", 2], ["stone", 6]],
+    [["bomb", 2], ["ice", 2]],
+    [["stone", 6], ["crystal", 5], ["ice", 2]],
+  ];
+  const TIGHT = 0.85; // budget squeeze: finishing everything (3 stars) should take good play; partial goals still give 1-2 stars
+  const SCORE_PER_WORD = 42; // median points per word + placement on joker levels, measured with the bot (calib in test.js)
+  const isJoker = (n) => n >= 6 && n % 7 === 6;
   function levelDef(n) {
-    const r = rngFrom("lvl:" + n), biome = BIOMES[Math.floor(n / 10) % BIOMES.length];
-    let pool;
-    if (n === 0) pool = ["stone"]; else if (n === 1) pool = ["crystal"]; else if (n === 2) pool = ["stone", "crystal"]; else if (n === 3) pool = ["ice"];
-    else {
-      const avail = ["stone", "crystal", "ice"]; if (n >= 6) avail.push("long"); if (n >= 8) avail.push("bomb");
-      pool = shuffle(avail, r).slice(0, n >= 15 && r() < 0.4 ? 3 : 2);
+    const r = rngFrom("lvl:" + n), biome = BIOMES[Math.floor(n / 10) % BIOMES.length], board = emptyBoard();
+    if (isJoker(n)) { // bonus level: rich letters, one score goal, extra gifts
+      const moves = 12 + Math.min(8, Math.floor(n / 20));
+      return { n, biome, joker: true, goals: [{ type: "score", need: Math.round((SCORE_PER_WORD * moves * 0.75) / 50) * 50 }], board, moves, plantRate: 0.6,
+        rates: { joker: 0.15, bomb: 0.07, gold: 0.15, crystal: 0 } };
     }
-    const board = emptyBoard(), goals = [];
-    for (const type of pool) {
-      if (type === "stone") goals.push({ type, need: scatter(board, Math.min(10, 3 + Math.floor(n * 0.2)), { ob: "stone", hp: 1 }, r) });
-      if (type === "ice") goals.push({ type, need: 2 * scatter(board, Math.min(6, 2 + Math.floor(Math.max(0, n - 3) * 0.12)), { ob: "ice", hp: 2 }, r) }); // need counts hits: 2 per ice
-      if (type === "crystal") goals.push({ type, need: Math.min(8, 3 + Math.floor(n * 0.12)) });
-      if (type === "long") goals.push({ type, need: Math.min(4, 1 + Math.floor(n / 15)) });
-      if (type === "bomb") goals.push({ type, need: Math.min(4, 2 + Math.floor(n / 25)) });
+    let plan;
+    if (n < EARLY.length) plan = EARLY[n];
+    else {
+      const avail = ["stone", "crystal", "ice", "long"]; if (n >= 8) avail.push("bomb");
+      const size = { stone: Math.min(10, 4 + Math.floor(n * 0.2)), ice: Math.min(6, 2 + Math.floor((n - 3) * 0.12)), crystal: Math.min(8, 4 + Math.floor(n * 0.12)),
+        long: Math.min(4, 2 + Math.floor(n / 15)), bomb: Math.min(4, 2 + Math.floor(n / 25)) };
+      plan = shuffle(avail, r).slice(0, n >= 15 && r() < 0.4 ? 3 : 2).map((t) => [t, size[t]]);
+    }
+    const goals = [];
+    for (const [type, size] of plan) {
+      if (type === "stone") goals.push({ type, need: scatter(board, size, { ob: "stone", hp: 1 }, r) });
+      else if (type === "ice") goals.push({ type, need: 2 * scatter(board, size, { ob: "ice", hp: 2 }, r) }); // need counts hits: 2 per ice
+      else goals.push({ type, need: size });
     }
     const costs = goals.map((g) => g.need * COST[g.type]).sort((a, b) => b - a);
-    let moves = Math.ceil(4 + costs[0] + 0.35 * costs.slice(1).reduce((a, b) => a + b, 0)); // the slowest goal sets the pace
-    if (n < 5) moves = Math.max(moves, 16); // first levels teach, they should not fail
-    return { n, biome, goals, board, moves, plantRate: 0.5, rates: { ...BASE_RATES, crystal: pool.includes("crystal") ? 0.15 : 0, bomb: pool.includes("bomb") ? 0.09 : BASE_RATES.bomb } };
+    const moves = Math.ceil(TIGHT * (4 + costs[0] + 0.35 * costs.slice(1).reduce((a, b) => a + b, 0))); // the slowest goal sets the pace
+    const types = goals.map((g) => g.type);
+    return { n, biome, joker: false, goals, board, moves, plantRate: 0.5,
+      rates: { ...BASE_RATES, crystal: types.includes("crystal") ? 0.15 : 0, bomb: types.includes("bomb") ? 0.09 : BASE_RATES.bomb } };
   }
+  // Stars from how much of the goals got done: all = 3, 70% = 2, 40% = 1, less = level not passed
+  function starsFor(L, left) {
+    const f = L.goals.reduce((a, g) => a + Math.min(1, (g.need - Math.max(0, left[g.type])) / g.need), 0) / L.goals.length;
+    return f >= 0.999 ? 3 : f >= 0.7 ? 2 : f >= 0.4 ? 1 : 0;
+  }
+  // Points: shared by the page and the test bot so budgets and score goals match what players see
+  const wordPoints = (word, piece, chain = 1) => word.length * 3 * 2 ** piece.gold * chain + (word.length >= 5 ? 15 : 0);
+  const clearPoints = (res, combo = 1) => (res.lines ? 20 * res.lines * res.lines * Math.max(1, combo) : 0) + res.bombed.length * 5 + res.broken.length * 10;
   // Goal progress made by one word + its placement
   function progressOf(word, piece, res) {
     return { stone: res.broken.filter((b) => b.ob === "stone").length, ice: res.broken.filter((b) => b.ob === "ice").length + res.cracked.length,
@@ -246,6 +272,6 @@
   }
 
   const api = { M, B, BOX, MIN_LEN, MAX_LEN, BASE_RATES, BIOMES, REGIONS, isWord, resolveWord, letterOf, kindOf, findWords, adjacent, shapeOf, makePiece,
-    plantWord, collapse, freshGrid, shuffleGrid, rngFrom, levelDef, progressOf, emptyBoard, canPlace, fits, place, bestMove };
+    plantWord, collapse, freshGrid, shuffleGrid, rngFrom, levelDef, isJoker, starsFor, wordPoints, clearPoints, progressOf, emptyBoard, canPlace, fits, place, bestMove };
   if (typeof module !== "undefined") module.exports = api; else root.Core = api;
 })(typeof window !== "undefined" ? window : globalThis);

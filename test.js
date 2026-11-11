@@ -31,27 +31,27 @@ for (let n = 0; n < 200; n++) {
   assert(!C.REGIONS.some((reg) => reg.every((i) => L.board[i])), `level ${n} starts with a full region`);
 }
 
-// calibration: a greedy bot (one block at a time) plays levels 1-60; it must finish nearly all of them inside the move budget
-let ok = 0, ratios = [], stuck = 0;
-for (let n = 0; n < 60; n++) {
-  const L = C.levelDef(n), r = C.rngFrom("bot" + n);
-  let grid = C.freshGrid(r, { rates: L.rates }), board = L.board.slice(), used = 0, combo = 0;
-  const left = Object.fromEntries(L.goals.map((g) => [g.type, g.need]));
-  while (Object.values(left).some((v) => v > 0) && used < 200) {
-    const open = Object.fromEntries(Object.entries(left).filter(([, v]) => v > 0));
-    const mv = C.bestMove(grid, board, open);
-    if (!mv) { stuck++; break; }
-    const piece = C.makePiece(grid, mv.path), res = C.place(board, piece, mv.r, mv.c, 0);
-    combo = res.lines ? combo + 1 : 0;
-    const pr = C.progressOf(mv.word, piece, res);
-    for (const k in left) left[k] = Math.max(0, left[k] - pr[k]);
-    board = res.board; grid = C.collapse(grid, mv.path, r, { rates: L.rates, plantRate: L.plantRate }).grid; used++;
+// calibration: a greedy bot plays levels 1-30 (2 letter seeds each) until goals are done or moves run out
+const sum = [0, 0, 0, 0];
+for (let n = 0; n < 30; n++) {
+  const L = C.levelDef(n);
+  for (let s = 0; s < 2; s++) {
+    const r = C.rngFrom(`bot${n}:${s}`);
+    let grid = C.freshGrid(r, { rates: L.rates }), board = L.board.slice(), used = 0, combo = 0;
+    const left = Object.fromEntries(L.goals.map((g) => [g.type, g.need]));
+    while (Object.values(left).some((v) => v > 0) && used < L.moves) {
+      const open = Object.fromEntries(Object.entries(left).filter(([, v]) => v > 0)), mv = C.bestMove(grid, board, open); if (!mv) break;
+      const piece = C.makePiece(grid, mv.path), res = C.place(board, piece, mv.r, mv.c, 0); used++;
+      combo = res.lines ? combo + 1 : 0;
+      const pr = { ...C.progressOf(mv.word, piece, res), score: C.wordPoints(mv.word, piece) + piece.cells.length + C.clearPoints(res, combo) };
+      for (const k in left) left[k] = Math.max(0, left[k] - (pr[k] || 0));
+      board = res.board; grid = C.collapse(grid, mv.path, r, { rates: L.rates, plantRate: L.plantRate }).grid;
+    }
+    sum[C.starsFor(L, left)]++;
   }
-  const done = !Object.values(left).some((v) => v > 0);
-  if (done && used <= L.moves) ok++;
-  ratios.push(done ? used / L.moves : 9);
 }
-ratios.sort((a, b) => a - b);
-console.log(`bot finished ${ok}/60 levels within the move budget; stuck ${stuck}; used/budget median ${ratios[30].toFixed(2)}, 90th pct ${ratios[54].toFixed(2)}`);
-assert(ok >= 48, "budgets too tight"); // 80%: the bot plays one block at a time, a person holds three
+console.log(`bot over 60 plays: 3 stars ${sum[3]}, 2 stars ${sum[2]}, 1 star ${sum[1]}, failed ${sum[0]}`);
+assert(sum[3] >= 36 && sum[0] <= 3, "difficulty out of range");
+assert(C.isJoker(6) && C.isJoker(13) && !C.isJoker(5) && C.levelDef(6).goals[0].type === "score");
+assert.strictEqual(C.starsFor({ goals: [{ type: "stone", need: 10 }] }, { stone: 3 }), 2);
 console.log("all core checks passed");

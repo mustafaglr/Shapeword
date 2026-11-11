@@ -15,8 +15,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Inter:wght@500;600&display=swap">
 <style>
-/* Layout: one phone column in play order: moves + goals -> themed letter field -> your blocks -> 9x9 board -> boosters.
-   Letters, board cells and blocks are persistent elements that move; bursts, sparks and confetti run on one canvas above the page. */
+/* Layout: three screens - a landing page with stats, a winding world map, and the game (goals -> letter field -> blocks -> 9x9 board -> boosters),
+   sized to fit one phone screen. Letters, cells and blocks are persistent elements that move; sparks and confetti run on one canvas. */
 :root {
   --bg: #ECEEF6; --surface: #FFFFFF; --ink: #1D2340; --muted: #646B8A; --line: #D6DAEA; --well: #DCE0EE;
   --accent: #4D7CFE; --good: #1A9E73; --bad: #E5484D; --gold: #F5B700; --gold-ink: #3A2A00; --rival: #E5484D;
@@ -30,14 +30,14 @@
   --bg: #11142A; --surface: #232951; --ink: #ECEEF8; --muted: #A3AACB; --line: #343C6E; --well: #1B2046;
   --accent: #7D9DFF; --good: #3CCB98; --bad: #FF6B70; --gold: #FFC93C; --gold-ink: #3A2A00; --rival: #FF6B70; color-scheme: dark }
 
-/* sized to fit one phone screen: the letter field and the board scale with the viewport height (dvh where supported) */
 html, body { overscroll-behavior: none; }
 body { background: var(--bg); color: var(--ink); font-family: var(--text); font-size: 15px; overflow-x: hidden; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
   padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px)); padding-block: 6px 12px; }
 main { max-width: 420px; margin: 0 auto; display: flex; flex-direction: column; gap: 7px; user-select: none; -webkit-user-select: none; }
-.top { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; }
-.back { border: 0; background: var(--surface); color: var(--ink); width: 36px; height: 36px; border-radius: 12px; font: 700 1.3rem var(--display); cursor: pointer; box-shadow: inset 0 0 0 1px var(--line); }
-.moves { min-width: 56px; text-align: center; background: var(--surface); border-radius: 14px; padding: 4px 8px; box-shadow: inset 0 0 0 1px var(--line); }
+.top { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 6px; }
+.iconbtn { border: 0; background: var(--surface); color: var(--ink); width: 36px; height: 36px; border-radius: 12px; font: 700 1.2rem var(--display); cursor: pointer; box-shadow: inset 0 0 0 1px var(--line); display: grid; place-items: center; }
+.iconbtn svg { width: 20px; height: 20px; }
+.moves { min-width: 54px; text-align: center; background: var(--surface); border-radius: 14px; padding: 4px 8px; box-shadow: inset 0 0 0 1px var(--line); }
 .moves strong { display: block; font: 700 1.45rem/1 var(--display); font-variant-numeric: tabular-nums; }
 .moves small { font: 600 .6rem var(--text); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .moves.low strong { color: var(--bad); }
@@ -47,13 +47,13 @@ main { max-width: 420px; margin: 0 auto; display: flex; flex-direction: column; 
 .goal svg { width: 24px; height: 24px; }
 .goal.done { background: var(--good); color: #fff; box-shadow: none; }
 .duel { display: grid; gap: 4px; width: 100%; }
-.duel .row { display: grid; grid-template-columns: 56px 1fr 46px; align-items: center; gap: 8px; font: 600 .8rem var(--text); }
-.duel .row span:last-child { text-align: right; font: 700 .95rem var(--display); font-variant-numeric: tabular-nums; }
+.duel .row { display: grid; grid-template-columns: 50px 1fr 42px; align-items: center; gap: 6px; font: 600 .76rem var(--text); }
+.duel .row span:last-child { text-align: right; font: 700 .92rem var(--display); font-variant-numeric: tabular-nums; }
 .bar { height: 9px; border-radius: 999px; background: var(--well); overflow: hidden; }
 .bar i { display: block; height: 100%; width: 0; border-radius: 999px; background: var(--accent); transition: width .3s; }
 .bar.rival i { background: var(--rival); }
 
-/* themed letter field; the word you trace shows at its top in white */
+/* themed letter field; the traced word shows at its top */
 .field { position: relative; border-radius: 24px; padding: 8px 12px 12px; background: linear-gradient(160deg, var(--c1), var(--c2)); overflow: hidden; transition: background .6s; }
 .field::before { content: ""; position: absolute; inset: 0; background-image: radial-gradient(rgba(255,255,255,.16) 1.5px, transparent 1.6px); background-size: 16px 16px; pointer-events: none; animation: drift 30s linear infinite; }
 @keyframes drift { to { background-position: 160px 80px; } }
@@ -88,7 +88,7 @@ main { max-width: 420px; margin: 0 auto; display: flex; flex-direction: column; 
 .mini, .drag { display: grid; gap: 2px; }
 .mini i, .drag i { border-radius: 4px; display: block; position: relative; box-shadow: inset 0 -2px 0 rgba(0,0,0,.18), inset 0 2px 0 rgba(255,255,255,.25); }
 .mini i.bomb::after, .drag i.bomb::after { content: ""; position: absolute; inset: 22%; border-radius: 50%; background: #2B2240; box-shadow: 0 0 0 2px #FF5A4F; }
-.drag { position: fixed; pointer-events: none; z-index: 20; filter: drop-shadow(0 8px 10px rgba(0,0,0,.28)); }
+.drag { position: fixed; pointer-events: none; z-index: 25; filter: drop-shadow(0 8px 10px rgba(0,0,0,.28)); }
 
 .board { display: grid; grid-template-columns: repeat(9, 1fr); width: min(100%, 37vh); width: min(100%, 37dvh); margin: 0 auto; background: var(--well); border-radius: 16px; padding: 4px; box-sizing: border-box; touch-action: none; }
 .cell { aspect-ratio: 1; max-width: 100%; padding: 1.5px; box-sizing: border-box; }
@@ -107,7 +107,54 @@ main { max-width: 420px; margin: 0 auto; display: flex; flex-direction: column; 
 .booster svg { width: 20px; height: 20px; }
 .booster .n { position: absolute; top: -6px; right: -4px; min-width: 20px; height: 20px; border-radius: 999px; background: var(--accent); color: #fff; font: 700 .72rem/20px var(--text); padding: 0 5px; box-sizing: border-box; }
 .booster .n.ad { background: var(--gold); color: var(--gold-ink); }
-.booster:focus-visible, .btn:focus-visible, .pick:focus-visible, .lvl:focus-visible, .back:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* landing + map screens */
+.screen { position: fixed; inset: 0; z-index: 20; overflow-y: auto; background: var(--bg); -webkit-overflow-scrolling: touch;
+  padding-left: max(14px, env(safe-area-inset-left, 0px)); padding-right: max(14px, env(safe-area-inset-right, 0px)); padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+.land { max-width: 420px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; padding-block: 14px 24px; }
+.landtop { display: flex; justify-content: space-between; align-items: center; }
+.logo { display: flex; gap: 3px; }
+.logo span { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font: 700 1.05rem var(--display); color: #1D2340;
+  background: radial-gradient(circle at 35% 28%, #FFFFFF 0 16%, #EEF0FA 42%, #C6CCE4 100%); box-shadow: 0 2px 0 rgba(0,0,0,.25); animation: bob 2.4s ease-in-out infinite; }
+.logo span:nth-child(3n) { background: radial-gradient(circle at 35% 28%, #FFF6D0 0 14%, #FFC93C 48%, #D99400 100%); }
+.logo span:nth-child(4n) { background: radial-gradient(circle at 35% 28%, #F3E8FF 0 14%, #B57BFF 50%, #6D28D9 100%); color: #fff; }
+@keyframes bob { 50% { transform: translateY(-4px); } }
+.hello { font: 700 1.6rem/1.15 var(--display); margin: 0; text-wrap: balance; }
+.sub { margin: 0; color: var(--muted); }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.stat { background: var(--surface); border-radius: 16px; padding: 12px; box-shadow: inset 0 0 0 1px var(--line); display: flex; flex-direction: column; gap: 2px; }
+.stat strong { font: 700 1.6rem/1.1 var(--display); font-variant-numeric: tabular-nums; }
+.stat span { font: 600 .72rem var(--text); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.panel { background: var(--surface); border-radius: 16px; padding: 12px 14px; box-shadow: inset 0 0 0 1px var(--line); display: flex; flex-direction: column; gap: 8px; }
+.panel h3 { margin: 0; font: 700 1rem var(--display); display: flex; justify-content: space-between; align-items: baseline; }
+.panel h3 small { font: 500 .72rem var(--text); color: var(--muted); }
+.lb { display: grid; gap: 3px; font-size: .9rem; }
+.lb div { display: grid; grid-template-columns: 22px 1fr auto auto; gap: 8px; padding: 5px 8px; border-radius: 10px; font-variant-numeric: tabular-nums; align-items: center; }
+.lb div.me { background: color-mix(in srgb, var(--accent) 18%, transparent); font-weight: 600; }
+.lb span:first-child, .lb small { color: var(--muted); }
+.cloudline { font-size: .74rem; color: var(--muted); text-align: center; }
+.nameform { display: flex; flex-direction: column; gap: 10px; }
+.nameform label { font: 700 1.2rem var(--display); }
+.nameform input, .card input { font: 600 1.1rem var(--text); padding: 12px 14px; border-radius: 14px; border: 2px solid var(--line); background: var(--surface); color: var(--ink); width: 100%; box-sizing: border-box; }
+
+.maphead { position: sticky; top: 0; z-index: 3; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 0; max-width: 420px; margin: 0 auto; }
+.maphead::before { content: ""; position: absolute; inset: 0 -14px; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: -1; }
+.maphead strong { font: 700 1.2rem var(--display); }
+.chipstat { font: 700 1rem var(--display); background: var(--surface); padding: 6px 12px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--line); font-variant-numeric: tabular-nums; }
+.mapinner { position: relative; max-width: 420px; margin: 0 auto 30px; border-radius: 26px; overflow: hidden; }
+.world { position: absolute; left: 0; right: 0; }
+.world .wlabel { position: absolute; left: 12px; bottom: 10px; font: 700 .78rem var(--text); letter-spacing: .1em; text-transform: uppercase; color: #fff; background: rgba(0,0,0,.25); padding: 5px 10px; border-radius: 999px; }
+.mappath { position: absolute; inset: 0; pointer-events: none; }
+.node { position: absolute; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%; border: 0; cursor: pointer; font: 700 1.25rem var(--display); color: #1D2340;
+  background: radial-gradient(circle at 35% 28%, #FFFFFF 0 16%, #EEF0FA 42%, #C6CCE4 100%); box-shadow: 0 4px 0 rgba(0,0,0,.3), 0 0 0 4px rgba(255,255,255,.55); }
+.node small { position: absolute; left: 50%; top: 100%; transform: translateX(-50%); margin-top: 2px; font: 700 .85rem/1 var(--text); color: #FFD34D; text-shadow: 0 1px 2px rgba(0,0,0,.5); white-space: nowrap; letter-spacing: 1px; }
+.node.done { background: radial-gradient(circle at 35% 28%, #FFF6D0 0 14%, #FFC93C 48%, #D99400 100%); color: #3A2A00; }
+.node.joker { box-shadow: 0 4px 0 rgba(0,0,0,.3), 0 0 0 4px #fff, 0 0 0 8px transparent; background: conic-gradient(from 30deg, #F25F5C, #FFB627, #2EC4B6, #4D7CFE, #9B5DE5, #F25F5C); color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.4); }
+.node.locked { background: rgba(255,255,255,.35); color: rgba(255,255,255,.85); box-shadow: 0 0 0 3px rgba(255,255,255,.3); cursor: default; }
+.node.current { animation: nodepulse 1.3s ease-in-out infinite; }
+@keyframes nodepulse { 50% { transform: scale(1.12); box-shadow: 0 4px 0 rgba(0,0,0,.3), 0 0 0 8px rgba(255,255,255,.6); } }
+.avatar { position: absolute; width: 34px; height: 34px; margin: -78px 0 0 -17px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; font: 700 1rem var(--display); box-shadow: 0 3px 0 rgba(0,0,0,.25), 0 0 0 3px #fff; z-index: 2; pointer-events: none; animation: bob 1.6s ease-in-out infinite; }
 
 /* floating effects */
 #fx { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 35; }
@@ -116,7 +163,7 @@ main { max-width: 420px; margin: 0 auto; display: flex; flex-direction: column; 
 .popnum { position: fixed; left: 0; top: 0; pointer-events: none; z-index: 37; font: 700 1.4rem var(--display); color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.35), 0 0 12px rgba(0,0,0,.25); white-space: nowrap; }
 .bigtext { position: fixed; left: 50%; pointer-events: none; z-index: 37; font: 700 2.6rem/1 var(--display); color: var(--gold); text-shadow: 0 3px 0 #B8801A, 0 0 22px rgba(255,201,60,.6); white-space: nowrap; }
 .wave { position: fixed; left: 0; top: 0; width: 220px; height: 220px; margin: -110px 0 0 -110px; border-radius: 50%; border: 6px solid #FFD27A; pointer-events: none; z-index: 36; }
-.toast { position: fixed; left: 50%; top: max(14px, env(safe-area-inset-top, 0px)); transform: translateX(-50%); z-index: 40; background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 999px; font: 600 .88rem var(--text); box-shadow: 0 6px 18px rgba(0,0,0,.25); }
+.toast { position: fixed; left: 50%; top: max(14px, env(safe-area-inset-top, 0px)); transform: translateX(-50%); z-index: 40; background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 999px; font: 600 .88rem var(--text); box-shadow: 0 6px 18px rgba(0,0,0,.25); max-width: 90vw; text-align: center; }
 
 .overlay { position: fixed; inset: 0; z-index: 30; background: rgba(10, 12, 28, .74); display: grid; place-items: center; overflow-y: auto; animation: fadein .2s ease-out;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 16px; }
@@ -126,12 +173,15 @@ main { max-width: 420px; margin: 0 auto; display: flex; flex-direction: column; 
 .card h2 { font: 700 1.7rem/1.1 var(--display); margin: 0; text-wrap: balance; }
 .card h3 { font: 700 1rem var(--display); margin: 4px 0 0; text-align: left; }
 .card p { margin: 0; color: var(--muted); }
+.card .left { text-align: left; }
 .big { font: 700 2.8rem/1 var(--display); font-variant-numeric: tabular-nums; color: var(--accent); }
+.badge { align-self: center; font: 700 .75rem var(--text); letter-spacing: .1em; text-transform: uppercase; padding: 4px 10px; border-radius: 999px; color: #fff; background: conic-gradient(from 30deg, #F25F5C, #FFB627, #2EC4B6, #4D7CFE, #9B5DE5, #F25F5C); }
 .stars { display: flex; gap: 6px; justify-content: center; } .stars svg { width: 44px; height: 44px; animation: starin .45s cubic-bezier(.3,1.6,.6,1) backwards; }
 @keyframes starin { from { transform: scale(0) rotate(-40deg); } }
-.goallist { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
-.goallist div { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 12px; border-radius: 16px; background: var(--well); min-width: 72px; font: 600 .78rem var(--text); color: var(--muted); }
-.goallist svg { width: 36px; height: 36px; } .goallist strong { font: 700 1.3rem var(--display); color: var(--ink); }
+.goallist { display: grid; gap: 8px; text-align: left; }
+.goallist div { display: grid; grid-template-columns: 40px 1fr; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 14px; background: var(--well); font-size: .86rem; color: var(--muted); }
+.goallist svg { width: 36px; height: 36px; } .goallist strong { font: 700 1rem var(--display); color: var(--ink); display: block; }
+.rules { display: grid; gap: 6px; text-align: left; font-size: .86rem; color: var(--muted); margin: 0; padding-left: 18px; }
 .gifts { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
 .gift { width: 74px; padding: 10px 4px 8px; border-radius: 14px; background: var(--well); display: flex; flex-direction: column; align-items: center; gap: 4px; font: 600 .74rem var(--text); animation: giftin .5s cubic-bezier(.3,1.5,.6,1) backwards; }
 .gift svg { width: 26px; height: 26px; } .gift strong { font: 700 .95rem var(--display); color: var(--accent); }
@@ -140,22 +190,13 @@ main { max-width: 420px; margin: 0 auto; display: flex; flex-direction: column; 
 .vs div { display: flex; flex-direction: column; } .vs strong { font: 700 2.1rem/1 var(--display); font-variant-numeric: tabular-nums; } .vs span { font-size: .78rem; color: var(--muted); }
 .vs .win strong { color: var(--good); }
 .btn { font: 600 1rem var(--display); border: 0; border-radius: 14px; padding: 12px 16px; cursor: pointer; background: var(--well); color: var(--ink); transition: transform .1s; }
-.btn:active, .pick:active, .lvl:active, .booster:active { transform: scale(.96); }
+.btn:active, .node:active, .booster:active, .iconbtn:active { transform: scale(.95); }
 .btn.primary { background: var(--accent); color: #fff; box-shadow: 0 4px 0 color-mix(in srgb, var(--accent) 60%, #000); }
-.pick { text-align: left; border: 0; border-radius: 16px; padding: 13px 16px; cursor: pointer; background: var(--well); color: var(--ink); display: flex; flex-direction: column; gap: 2px; font: 600 .85rem var(--text); transition: transform .1s; }
-.pick strong { font: 700 1.2rem var(--display); } .pick span { color: var(--muted); font-weight: 500; }
-.pick.primary { background: var(--accent); color: #fff; } .pick.primary span { color: rgba(255,255,255,.85); }
-.map { display: grid; gap: 12px; text-align: left; max-height: 62vh; overflow-y: auto; }
-.map h3 { margin: 0; display: flex; align-items: center; gap: 8px; } .map h3 i { width: 14px; height: 14px; border-radius: 50%; }
-.lvls { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
-.lvl { border: 0; border-radius: 12px; height: 50px; background: var(--well); color: var(--ink); font: 700 1rem var(--display); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; transition: transform .1s; }
-.lvl small { font: 600 .62rem var(--text); color: var(--gold); letter-spacing: 1px; }
-.lvl:disabled { opacity: .35; cursor: default; }
-.lvl.next { background: var(--accent); color: #fff; animation: nudge 1.2s ease-in-out infinite; } .lvl.next small { color: #fff; }
-@keyframes nudge { 50% { transform: scale(1.06); } }
-.legend { display: grid; gap: 7px; text-align: left; font-size: .84rem; color: var(--muted); }
-.legend div { display: flex; align-items: center; gap: 10px; }
-.legend .chip { width: 30px; height: 30px; flex: none; border-radius: 50%; display: grid; place-items: center; font: 600 1rem var(--display); }
+.btn.danger { background: color-mix(in srgb, var(--bad) 15%, var(--well)); color: var(--bad); }
+.btn.big2 { font-size: 1.2rem; padding: 15px 18px; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.admin { border: 2px dashed var(--gold); border-radius: 16px; padding: 12px; display: grid; gap: 8px; text-align: left; }
+.admin h3 { margin: 0; color: var(--gold); }
 .share { width: 100%; box-sizing: border-box; font: .85rem ui-monospace, Menlo, monospace; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px; resize: none; }
 @media (max-height: 700px) { /* short phone screens (browser bars showing): tighten spacing so nothing scrolls */
   body { padding-block: 4px 6px; } main { gap: 5px; } .field { padding: 6px 10px 8px; } .wordline { min-height: 24px; font-size: 1.05rem; } .booster { padding: 4px 4px 3px; } }
@@ -164,10 +205,11 @@ main { max-width: 420px; margin: 0 auto; display: flex; flex-direction: column; 
 
 </head>
 <body>
-<main id="app">
+<main id="app" hidden>
   <div class="top">
-    <button class="back" id="back" aria-label="Ana menü">‹</button>
+    <button class="iconbtn" id="back" aria-label="Haritaya dön">‹</button>
     <div class="goals" id="goals" aria-label="Hedefler"></div>
+    <button class="iconbtn" id="help" aria-label="Bu bölümde ne yapmalıyım?">?</button>
     <div class="moves" id="moves"><strong id="moves-n">0</strong><small id="moves-l">hamle</small></div>
   </div>
   <div class="field" id="field">
@@ -181,12 +223,29 @@ main { max-width: 420px; margin: 0 auto; display: flex; flex-direction: column; 
   <div class="board" id="board" aria-label="Tahta"></div>
   <div class="boosters" id="boosters"></div>
 </main>
+
+<section class="screen" id="landing" hidden>
+  <div class="land">
+    <div class="landtop">
+      <div class="logo" aria-label="Shapeword"><span>S</span><span>h</span><span>a</span><span>p</span><span>e</span><span>w</span><span>o</span><span>r</span><span>d</span></div>
+      <button class="iconbtn" id="gear" aria-label="Ayarlar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+    </div>
+    <div id="landbody"></div>
+  </div>
+</section>
+
+<section class="screen" id="mapview" hidden>
+  <div class="maphead"><button class="iconbtn" id="map-back" aria-label="Açılış ekranı">‹</button><strong>Harita</strong><span class="chipstat" id="map-stars">★ 0</span></div>
+  <div class="mapinner" id="mapinner"></div>
+</section>
+
 <canvas id="fx" aria-hidden="true"></canvas>
 <div class="overlay" id="ov" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
 <script src="words-tr.js" charset="utf-8"></script>
 <script src="core.js" charset="utf-8"></script>
+<script src="config.js" charset="utf-8"></script><!-- cloud save settings; only the GitHub Pages copy has this file -->
 <script>
 document.documentElement.lang = "tr"; // Turkish casing: i -> İ, ı -> I
 const { M, B, MAX_LEN } = Core;
@@ -198,14 +257,34 @@ const wait = (ms) => new Promise((r) => setTimeout(r, RM ? 0 : ms));
 const anim = (el, kf, o) => { const opts = RM ? { ...o, duration: 1, delay: 0 } : o;
   return Promise.race([el.animate(kf, opts).finished.catch(() => {}), new Promise((r) => setTimeout(r, (opts.duration || 0) + (opts.delay || 0) + 150))]); };
 const COLORS = ["#F25F5C", "#FFB627", "#2EC4B6", "#4D7CFE", "#9B5DE5"];
-// one colour pair per biome, in Core.BIOMES order (Orman, Çöl, Okyanus, Volkan, Buzul, Gece, Bahar, Kanyon)
+// one colour pair per biome, in Core.BIOMES order (Orman, Çöl, Okyanus, Volkan, Buzul, Gece, Bahar, Kanyon); joker levels use a rainbow
 const BIOME_THEMES = [["#1F6B45", "#9BCB5F"], ["#B4560B", "#F5C76B"], ["#0B4F8A", "#5ED3E8"], ["#8A1A0B", "#F07A3C"], ["#3A6EA5", "#BFE3FF"], ["#1B1446", "#7B6CF0"], ["#A3164F", "#F9C2D9"], ["#7A3B12", "#E0A15E"]];
+const JOKER_THEME = ["#7B2FF7", "#F2709C"];
+// a small repeating motif per biome for the map background
+const MOTIFS = [
+  '<path d="M30 6 46 34H14z" fill="#fff" opacity=".13"/><rect x="27" y="34" width="6" height="9" fill="#fff" opacity=".1"/>',
+  '<path d="M0 50 Q15 36 30 50 T60 50" fill="none" stroke="#fff" stroke-width="3" opacity=".14"/><rect x="40" y="12" width="5" height="18" rx="2.5" fill="#fff" opacity=".14"/><rect x="35" y="17" width="4" height="8" rx="2" fill="#fff" opacity=".14"/>',
+  '<path d="M0 30 Q10 20 20 30 T40 30 T60 30" fill="none" stroke="#fff" stroke-width="3" opacity=".16"/><circle cx="45" cy="12" r="3" fill="#fff" opacity=".18"/>',
+  '<path d="M10 50 26 20 42 50z" fill="#000" opacity=".12"/><circle cx="26" cy="14" r="3" fill="#FFD27A" opacity=".5"/><circle cx="48" cy="22" r="2" fill="#FFD27A" opacity=".4"/>',
+  '<path d="M30 14v32M16 22l28 16M44 22 16 38" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity=".22"/>',
+  '<circle cx="12" cy="14" r="1.6" fill="#fff" opacity=".7"/><circle cx="42" cy="30" r="1.2" fill="#fff" opacity=".6"/><circle cx="26" cy="48" r="2" fill="#FFF4B8" opacity=".7"/>',
+  '<circle cx="30" cy="30" r="5" fill="#fff" opacity=".25"/><circle cx="30" cy="20" r="5" fill="#fff" opacity=".18"/><circle cx="40" cy="30" r="5" fill="#fff" opacity=".18"/><circle cx="20" cy="30" r="5" fill="#fff" opacity=".18"/><circle cx="30" cy="40" r="5" fill="#fff" opacity=".18"/>',
+  '<path d="M0 18h60M0 34h60M0 50h60" stroke="#000" stroke-width="4" opacity=".1"/>',
+];
+const motifUrl = (k) => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60">${MOTIFS[k]}</svg>`)}")`;
 const GOALS = {
-  stone: { name: "Taş kır", svg: '<svg viewBox="0 0 24 24"><path d="M5 15l3-8 7-2 5 6-2 8-9 1z" fill="#8C8F9E" stroke="#5B5E6E" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 9l3 2 4-2" stroke="#B9BCC8" stroke-width="1.2" fill="none"/></svg>', color: "#8C8F9E" },
-  ice: { name: "Buz darbesi", svg: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4" fill="#BFE6FF" stroke="#6CB8E8" stroke-width="1.6"/><path d="M8 8l3 3M14 7l2 2M9 15l2-1" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>', color: "#9FD6F7" },
-  crystal: { name: "Kristal", svg: '<svg viewBox="0 0 24 24"><path d="M12 2l7 7-7 13L5 9z" fill="#B57BFF" stroke="#6D28D9" stroke-width="1.5" stroke-linejoin="round"/><path d="M5 9h14M12 2v20" stroke="#EADBFF" stroke-width="1"/></svg>', color: "#B57BFF" },
-  long: { name: "5+ harf", svg: '<svg viewBox="0 0 24 24"><rect x="1.5" y="6" width="21" height="12" rx="4" fill="#4D7CFE"/><text x="12" y="15.3" font-size="8" text-anchor="middle" fill="#fff" font-family="sans-serif" font-weight="700">5+</text></svg>', color: "#4D7CFE" },
-  bomb: { name: "Bomba", svg: '<svg viewBox="0 0 24 24"><circle cx="11" cy="14" r="7" fill="#2B2240"/><path d="M15 9l3-3" stroke="#2B2240" stroke-width="2.2"/><circle cx="19" cy="5" r="2.2" fill="#FF5A4F"/><circle cx="9" cy="12" r="1.6" fill="#6B5A8C"/></svg>', color: "#FF5A4F" },
+  stone: { name: "Taş kır", svg: '<svg viewBox="0 0 24 24"><path d="M5 15l3-8 7-2 5 6-2 8-9 1z" fill="#8C8F9E" stroke="#5B5E6E" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 9l3 2 4-2" stroke="#B9BCC8" stroke-width="1.2" fill="none"/></svg>',
+    how: "Tahtadaki gri taşlar, bulundukları satır, sütun ya da 3×3 kutu dolup patlayınca ya da hemen yanlarında bir patlama olunca kırılır." },
+  ice: { name: "Buz darbesi", svg: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4" fill="#BFE6FF" stroke="#6CB8E8" stroke-width="1.6"/><path d="M8 8l3 3M14 7l2 2M9 15l2-1" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>',
+    how: "Mavi buzlar taş gibi kırılır ama iki darbe ister: ilk patlamada çatlar, ikincide kırılır. Her darbe sayaçtan 1 düşer." },
+  crystal: { name: "Kristal", svg: '<svg viewBox="0 0 24 24"><path d="M12 2l7 7-7 13L5 9z" fill="#B57BFF" stroke="#6D28D9" stroke-width="1.5" stroke-linejoin="round"/><path d="M5 9h14M12 2v20" stroke="#EADBFF" stroke-width="1"/></svg>',
+    how: "Harf alanındaki mor, parlayan harfleri kelimende kullan. Her kristal harf 1 sayar." },
+  long: { name: "5+ harf", svg: '<svg viewBox="0 0 24 24"><rect x="1.5" y="6" width="21" height="12" rx="4" fill="#4D7CFE"/><text x="12" y="15.3" font-size="8" text-anchor="middle" fill="#fff" font-family="sans-serif" font-weight="700">5+</text></svg>',
+    how: "En az 5 harfli kelimeler yaz. Çapraz bağlantı serbest, uzun yollar daha kolay bulunur." },
+  bomb: { name: "Bomba", svg: '<svg viewBox="0 0 24 24"><circle cx="11" cy="14" r="7" fill="#2B2240"/><path d="M15 9l3-3" stroke="#2B2240" stroke-width="2.2"/><circle cx="19" cy="5" r="2.2" fill="#FF5A4F"/><circle cx="9" cy="12" r="1.6" fill="#6B5A8C"/></svg>',
+    how: "Kırmızı halkalı bomba harfini kelimende kullan. O kelimenin bloğu konduğu yerde 3×3 alanı patlatır." },
+  score: { name: "Puan", svg: '<svg viewBox="0 0 24 24"><path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4l-5.9 3.1 1.2-6.5L2.5 9.4l6.6-.9z" fill="#F5B700" stroke="#B8801A" stroke-width="1.2" stroke-linejoin="round"/></svg>',
+    how: "Joker bölümü: harflerde bol joker ve altın var. Kelimelerden ve patlamalardan puan topla; sayaç sıfıra inince bölüm biter." },
 };
 const BOOSTERS = {
   karistir: { name: "Karıştır", icon: '<path d="M4 7h3l10 10h3M4 17h3l3-3M14 10l3-3h3M18 4l3 3-3 3M18 14l3 3-3 3"/>' },
@@ -219,15 +298,58 @@ const AD_MS = 1000; // shortcut: 1 s simulated ad so testing is quick; real rewa
 const DUEL_SECONDS = 120, CHAIN_MS = 6000, NAMES = ["Deniz", "Ece", "Mert", "Zeynep", "Kaan", "Elif", "Can", "Selin", "Arda", "Defne"];
 const pad = (n) => String(n).padStart(2, "0");
 const NOW = new Date(), TODAY = `${NOW.getFullYear()}-${pad(NOW.getMonth() + 1)}-${pad(NOW.getDate())}`;
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
-// shortcut: progress, gifts and records live in this browser only; move to an account before launch.
+// ===================== profile, local + cloud save =====================
 const store = { get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
-let inv = store.get("sw3:inv", { karistir: 2, yenile: 1, ipucu: 2, joker: 1 });
-let prog = store.get("sw3:prog", { stars: {}, best: {}, duelBest: 0 });
-const saveAll = () => { store.set("sw3:inv", inv); store.set("sw3:prog", prog); };
-const nextLevel = () => { let n = 0; while (prog.stars[n]) n++; return n; };
+const idOf = (name) => name.trim().replace(/\s+/g, " ").toLocaleLowerCase("tr");
+const blankProfile = (name) => ({ name, id: idOf(name), stars: {}, best: {}, duelBest: 0, inv: { karistir: 2, yenile: 1, ipucu: 2, joker: 1 }, updated: Date.now() });
+let profile = store.get("sw4:profile", null);
+const isAdmin = () => profile && profile.id === "admin"; // the hidden switch: play under the name "admin" and every level opens, boosters are free
+const inv = () => profile.inv;
+const totalStars = (p = profile) => Object.values(p.stars).reduce((a, b) => a + b, 0);
+const nextLevel = (p = profile) => { let n = 0; while (p.stars[n]) n++; return n; };
+const unlocked = (n) => isAdmin() || n <= nextLevel();
+function mergeProfiles(a, b) { // same player on two devices: best result per level wins, newer boosters win
+  if (!a) return b; if (!b) return a;
+  const out = { ...a, stars: { ...a.stars }, best: { ...a.best } };
+  for (const [k, v] of Object.entries(b.stars || {})) out.stars[k] = Math.max(out.stars[k] || 0, v);
+  for (const [k, v] of Object.entries(b.best || {})) out.best[k] = Math.max(out.best[k] || 0, v);
+  out.duelBest = Math.max(a.duelBest || 0, b.duelBest || 0);
+  out.inv = (b.updated || 0) > (a.updated || 0) ? { ...b.inv } : { ...a.inv };
+  out.updated = Math.max(a.updated || 0, b.updated || 0);
+  return out;
+}
+function saveProfile() { profile.updated = Date.now(); store.set("sw4:profile", profile); cloudSaveSoon(); }
 
-let G = null, busy = true, swiping = false, path = [], drag = null, hintPath = [], tiles = [], cellEls = [], ghostCells = [];
+// Cloud: one JSONBin bin holds every player under its name. Works on the GitHub Pages copy; the Claude preview cannot reach other sites.
+// shortcut: last-write-wins per bin and no login; fine for testing with friends, needs a real backend before launch.
+const CLOUD = window.SW_CLOUD && window.SW_CLOUD.url ? window.SW_CLOUD : null;
+let cloudInfo = CLOUD ? "Bulut: bağlanıyor…" : "Bulut kapalı: kayıt sadece bu cihazda", cloudPlayers = null, saveTimer = null;
+async function cloudGet() {
+  const r = await fetch(CLOUD.url + "/latest", { headers: { [CLOUD.header || "X-Master-Key"]: CLOUD.key, "X-Bin-Meta": "false" }, cache: "no-store" });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  const data = await r.json();
+  return data && data.app === "shapeword" && data.players ? data : { app: "shapeword", players: {} };
+}
+async function cloudPut(data) {
+  const r = await fetch(CLOUD.url, { method: "PUT", headers: { "Content-Type": "application/json", [CLOUD.header || "X-Master-Key"]: CLOUD.key }, body: JSON.stringify(data) });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+}
+const stamp = () => new Date().toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
+async function cloudSync() { // pull, merge both ways, push
+  if (!CLOUD || !profile) return;
+  try {
+    const all = await cloudGet(), mine = all.players[profile.id];
+    const justReset = profile.resetAt && (!mine || profile.resetAt > (mine.updated || 0)); // a reset overwrites the cloud copy instead of merging it back
+    if (!justReset) profile = mergeProfiles(profile, mine);
+    store.set("sw4:profile", profile);
+    all.players[profile.id] = { ...profile }; await cloudPut(all);
+    cloudPlayers = all.players; cloudInfo = `Bulut: kaydedildi ${stamp()}`;
+  } catch (e) { cloudInfo = "Bulut: bağlantı yok, kayıt bu cihazda duruyor"; }
+}
+function cloudSaveSoon() { if (!CLOUD) return; clearTimeout(saveTimer); saveTimer = setTimeout(cloudSync, 1200); }
+async function cloudPeek() { if (!CLOUD) return null; try { const all = await cloudGet(); cloudPlayers = all.players; return all; } catch { cloudInfo = "Bulut: bağlantı yok"; return null; } }
 
 // ===================== effects =====================
 const fx = $("fx"), fctx = fx.getContext("2d"); let parts = [], fxOn = false, fxLast = 0;
@@ -262,8 +384,7 @@ function shockwave(x, y) {
   const d = document.createElement("div"); d.className = "wave"; document.body.appendChild(d);
   anim(d, [{ transform: `translate(${x}px,${y}px) scale(.1)`, opacity: 1 }, { transform: `translate(${x}px,${y}px) scale(1.4)`, opacity: 0 }], { duration: 520, easing: "ease-out" }).then(() => d.remove());
 }
-// an icon flies along an arc from a point to an element; resolves when it lands
-function flyTo(html, x, y, target, size = 30, delay = 0) {
+function flyTo(html, x, y, target, size = 30, delay = 0) { // an icon flies along an arc to an element
   const [tx, ty] = centerOf(target), d = document.createElement("div"); d.className = "fly"; d.innerHTML = html; d.style.width = d.style.height = size + "px"; document.body.appendChild(d);
   const mx = (x + tx) / 2 + (Math.random() - 0.5) * 60, my = Math.min(y, ty) - 70;
   return anim(d, [{ transform: `translate(${x - size / 2}px,${y - size / 2}px) scale(.6)` }, { transform: `translate(${mx - size / 2}px,${my - size / 2}px) scale(1.25)`, offset: 0.45 }, { transform: `translate(${tx - size / 2}px,${ty - size / 2}px) scale(.8)` }],
@@ -271,46 +392,153 @@ function flyTo(html, x, y, target, size = 30, delay = 0) {
 }
 function confetti() { const w = innerWidth; for (let k = 0; k < 6; k++) setTimeout(() => burst(w * (0.15 + Math.random() * 0.7), innerHeight * 0.25, COLORS[k % 5], 26, 1.3), k * 120); }
 let toastTimer;
-function toast(text) { const t = $("toast"); t.textContent = text; t.hidden = false; anim(t, [{ transform: "translate(-50%,-20px)", opacity: 0 }, { transform: "translate(-50%,0)", opacity: 1 }], { duration: 250, easing: "ease-out" }); clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 1900); }
-const bump = (el) => anim(el, [{ transform: "scale(1)" }, { transform: "scale(1.25)" }, { transform: "scale(1)" }], { duration: 300, easing: "ease-out" });
+function toast(text) { const t = $("toast"); t.textContent = text; t.hidden = false; anim(t, [{ transform: "translate(-50%,-20px)", opacity: 0 }, { transform: "translate(-50%,0)", opacity: 1 }], { duration: 250, easing: "ease-out" }); clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 2000); }
+const bump = (el) => el && anim(el, [{ transform: "scale(1)" }, { transform: "scale(1.25)" }, { transform: "scale(1)" }], { duration: 300, easing: "ease-out" });
 
-// ===================== menus =====================
-function card(html) { $("ov").innerHTML = `<div class="card">${html}</div>`; $("ov").hidden = false; $("ov").querySelector("button")?.focus(); }
-const legend = `<div class="legend">
-  <div><span class="chip" style="background:radial-gradient(circle at 35% 28%,#FFF6D0,#FFC93C 48%,#D99400);color:#3A2A00">a</span>Altın harf: kelime puanı ×2</div>
-  <div><span class="chip" style="background:radial-gradient(circle at 35% 28%,#F3E8FF,#B57BFF 50%,#6D28D9);color:#fff">k</span>Kristal harf: hedeflerde toplanır</div>
-  <div><span class="chip" style="background:radial-gradient(circle at 35% 28%,#6B5A8C,#2B2240 55%);color:#fff;box-shadow:0 0 0 2px #FF5A4F">b</span>Bomba: bloğu konduğu yerde 3×3 alanı patlatır</div>
-  <div><span class="chip" style="background:conic-gradient(#F25F5C,#FFB627,#2EC4B6,#4D7CFE,#9B5DE5,#F25F5C);color:#fff">?</span>Joker: her harfin yerine geçer</div>
-</div>`;
-function home() {
-  busy = true; if (G) G.running = false;
-  const n = nextLevel();
-  card(`<h2>Shapeword</h2>
-    <button class="pick primary" id="h-go"><strong>Bölüm ${n + 1}</strong><span>${Core.BIOMES[Math.floor(n / 10) % Core.BIOMES.length]} dünyası. Kelime yaz, blok yerleştir, hedefleri tamamla.</span></button>
-    <button class="pick" id="h-map"><strong>Bölüm haritası</strong><span>Sonsuz bölüm, her 10 bölümde yeni bir dünya.</span></button>
-    <button class="pick" id="h-duel"><strong>Günlük Düello</strong><span>2 dakika, bugün herkes aynı harflerle, rakibe karşı.</span></button>${legend}`);
-  $("h-go").onclick = () => intro(n); $("h-map").onclick = map; $("h-duel").onclick = startDuel;
+// ===================== screens =====================
+let G = null, busy = true, swiping = false, path = [], drag = null, hintPath = [], tiles = [], cellEls = [], ghostCells = [];
+function show(which) { // "landing" | "map" | "game"
+  $("landing").hidden = which !== "landing"; $("mapview").hidden = which !== "map"; $("app").hidden = which !== "game";
+  if (which !== "game") { busy = true; if (G) G.running = false; }
 }
-function map() {
-  const nx = nextLevel(), world = Math.floor(nx / 10), worlds = [Math.max(0, world - 1), world, world + 1].filter((w, i, a) => a.indexOf(w) === i);
-  card(`<h2>Bölümler</h2><div class="map">${worlds.map((w) => `<div><h3><i style="background:${BIOME_THEMES[w % 8][0]}"></i>${w + 1}. dünya · ${Core.BIOMES[w % Core.BIOMES.length]}</h3><div class="lvls">${Array.from({ length: 10 }, (_, k) => {
-      const n = w * 10 + k, s = prog.stars[n] || 0;
-      return `<button class="lvl${n === nx ? " next" : ""}" data-n="${n}" ${n > nx ? "disabled" : ""} aria-label="Bölüm ${n + 1}, ${s} yıldız">${n + 1}<small>${n < nx ? "★".repeat(s) + "☆".repeat(3 - s) : ""}</small></button>`;
-    }).join("")}</div></div>`).join("")}</div><button class="btn" id="m-back">Geri</button>`);
-  $("ov").querySelectorAll(".lvl").forEach((b) => (b.onclick = () => intro(+b.dataset.n)));
-  $("m-back").onclick = home;
-  $("ov").querySelector(".lvl.next")?.scrollIntoView({ block: "center" });
+function card(html) { $("ov").innerHTML = `<div class="card">${html}</div>`; $("ov").hidden = false; $("ov").querySelector("button, input")?.focus(); }
+const closeCard = () => ($("ov").hidden = true);
+
+// ---- landing: name once, then a summary every time ----
+function landing() {
+  show("landing"); closeCard();
+  if (!profile) {
+    $("landbody").innerHTML = `<p class="hello">Kelime yaz, çizdiğin yol blok olsun, tahtada patlat.</p>
+      <form class="nameform" id="nameform"><label for="name-in">Adın ne?</label><input id="name-in" maxlength="16" autocomplete="nickname" placeholder="Örneğin Mustafa" required>
+      <button class="btn primary big2" type="submit">Başla</button></form>
+      <p class="sub">İsmin sıralamada görünür. Başka bir cihazda aynı ismi yazarsan kaldığın yerden devam edersin${CLOUD ? "" : " (bulut kaydı açık olduğunda)"}.</p>`;
+    $("nameform").onsubmit = async (e) => {
+      e.preventDefault(); const name = $("name-in").value.trim(); if (!name) return;
+      profile = blankProfile(name);
+      const old = store.get("sw3:prog", null); if (old) { profile.stars = old.stars || {}; profile.best = old.best || {}; profile.duelBest = old.duelBest || 0; } // keep progress from the earlier build
+      const all = await cloudPeek();
+      if (all && all.players[profile.id]) { profile = mergeProfiles(profile, all.players[profile.id]); toast(`Tekrar hoş geldin ${name}, kaydın bulundu`); }
+      if (isAdmin()) toast("Admin modu açık: tüm bölümler açık, güçlendiriciler sınırsız");
+      saveProfile(); landing();
+    };
+    return;
+  }
+  renderLanding(); cloudSync().then(renderLanding);
+}
+function renderLanding() {
+  if ($("landing").hidden || !profile) return;
+  const n = nextLevel(), worldIdx = Math.floor(n / 10) % Core.BIOMES.length, done = Object.keys(profile.stars).length;
+  const lb = leaderboardRows();
+  $("landbody").innerHTML = `<div><p class="hello">Merhaba ${esc(profile.name)}${isAdmin() ? " · admin" : ""}</p><p class="sub">${Core.BIOMES[worldIdx]} dünyasındasın, sıradaki bölüm ${n + 1}.</p></div>
+    <button class="btn primary big2" id="l-go">Devam et · Bölüm ${n + 1}</button>
+    <div class="stats">
+      <div class="stat"><strong>${done}</strong><span>bölüm geçildi</span></div>
+      <div class="stat"><strong>★ ${totalStars()}</strong><span>yıldız / ${done * 3}</span></div>
+      <div class="stat"><strong>${profile.duelBest || 0}</strong><span>düello rekoru</span></div>
+      <div class="stat"><strong>${Object.values(inv()).reduce((a, b) => a + b, 0)}</strong><span>güçlendirici</span></div>
+    </div>
+    <div class="row2"><button class="btn" id="l-map">Harita</button><button class="btn" id="l-duel">Günlük Düello</button></div>
+    <div class="panel"><h3>Sıralama <small>${cloudPlayers ? "tüm oyuncular" : "bu cihaz"}</small></h3>
+      <div class="lb">${lb.map((r, i) => `<div class="${r.me ? "me" : ""}"><span>${i + 1}</span><span>${esc(r.name)}</span><small>${r.level}. bölüm</small><strong>★ ${r.stars}</strong></div>`).join("") || `<p class="sub">Henüz başka oyuncu yok. Arkadaşlarına linki gönder.</p>`}</div></div>
+    <button class="btn" id="l-help">Nasıl oynanır?</button>
+    <p class="cloudline">${cloudInfo}</p>`;
+  $("l-go").onclick = () => intro(n); $("l-map").onclick = openMap; $("l-duel").onclick = startDuel; $("l-help").onclick = () => helpCard(null);
+}
+function leaderboardRows() {
+  const players = cloudPlayers ? Object.values(cloudPlayers) : [profile];
+  const rows = players.filter((p) => p && p.id !== "admin").map((p) => ({ name: p.name, stars: totalStars(p), level: nextLevel(p) + 1, me: p.id === profile.id }));
+  if (!rows.some((r) => r.me) && !isAdmin()) rows.push({ name: profile.name, stars: totalStars(), level: nextLevel() + 1, me: true });
+  rows.sort((a, b) => b.stars - a.stars || b.level - a.level);
+  const top = rows.slice(0, 6); if (!top.some((r) => r.me)) { const me = rows.find((r) => r.me); if (me) top.push(me); }
+  return top;
+}
+$("gear").onclick = () => settings();
+
+// ---- settings (and the hidden admin tools) ----
+function settings() {
+  card(`<h2>Ayarlar</h2>
+    <div class="left"><label for="s-name"><strong>İsim</strong></label></div>
+    <input id="s-name" maxlength="16" value="${esc(profile.name)}">
+    <button class="btn primary" id="s-save">İsmi kaydet</button>
+    <p class="cloudline">${cloudInfo}</p>
+    ${isAdmin() ? `<div class="admin"><h3>Admin</h3><p>Tüm bölümler açık, güçlendiriciler sınırsız.</p>
+      <div class="row2"><input id="a-lvl" type="number" min="1" value="${nextLevel() + 1}" aria-label="Bölüm numarası"><button class="btn" id="a-go">Bölüme git</button></div>
+      <p>Buluttaki oyuncular: ${cloudPlayers ? Object.values(cloudPlayers).map((p) => `${esc(p.name)} (★${totalStars(p)})`).join(", ") || "yok" : "bağlantı yok"}</p></div>` : ""}
+    <button class="btn danger" id="s-reset">İlerlemeyi sıfırla</button>
+    <button class="btn" id="s-close">Kapat</button>`);
+  $("s-save").onclick = () => {
+    const name = $("s-name").value.trim(); if (!name) return;
+    const wasAdmin = isAdmin(); profile.name = name; profile.id = idOf(name); saveProfile();
+    if (isAdmin() && !wasAdmin) toast("Admin modu açık"); else toast("İsim kaydedildi");
+    closeCard(); renderLanding(); if (!$("mapview").hidden) openMap();
+  };
+  $("s-reset").onclick = () => {
+    const b = $("s-reset");
+    if (b.dataset.sure) { profile = { ...blankProfile(profile.name), resetAt: Date.now() + 1 }; saveProfile(); closeCard(); toast("İlerleme sıfırlandı"); landing(); }
+    else { b.dataset.sure = "1"; b.textContent = "Emin misin? Bütün yıldızların silinir. Tekrar bas."; }
+  };
+  $("s-close").onclick = () => { closeCard(); if (G && !$("app").hidden) busy = false; };
+  if (isAdmin()) $("a-go").onclick = () => { const n = Math.max(1, parseInt($("a-lvl").value, 10) || 1) - 1; closeCard(); intro(n); };
+}
+
+// ---- world map: a winding path, one themed band per world, level 1 at the bottom ----
+function openMap() {
+  show("map"); closeCard();
+  const nx = nextLevel(), lastShown = isAdmin() ? Math.max(100, (Math.floor(nx / 10) + 2) * 10) : (Math.floor(nx / 10) + 2) * 10;
+  const inner = $("mapinner"), W = Math.min(420, innerWidth - 28), STEP = 92, PAD = 70, H = lastShown * STEP + PAD * 2;
+  inner.style.height = H + "px";
+  const pt = (n) => [W / 2 + Math.sin(n * 0.85) * W * 0.3, H - PAD - n * STEP];
+  let html = "";
+  for (let w = 0; w * 10 < lastShown; w++) {
+    const k = w % 8, [c1, c2] = BIOME_THEMES[k], top = H - PAD - (w * 10 + 10) * STEP + STEP / 2, bottom = w === 0 ? H : H - PAD - w * 10 * STEP + STEP / 2;
+    html += `<div class="world" style="top:${w === Math.floor((lastShown - 1) / 10) ? 0 : top}px;height:${bottom - (w === Math.floor((lastShown - 1) / 10) ? 0 : top)}px;background:${motifUrl(k)}, linear-gradient(0deg, ${c1}, ${c2})"><span class="wlabel">${w + 1}. dünya · ${Core.BIOMES[k]}</span></div>`;
+  }
+  const pts = Array.from({ length: lastShown }, (_, n) => pt(n));
+  html += `<svg class="mappath" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><path d="M${pts.map((p) => p.join(",")).join(" L")}" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2 18"/></svg>`;
+  for (let n = 0; n < lastShown; n++) {
+    const [x, y] = pts[n], s = profile.stars[n] || 0, open = unlocked(n), joker = Core.isJoker(n);
+    const cls = ["node", s ? "done" : "", joker ? "joker" : "", open ? "" : "locked", n === nx ? "current" : ""].filter(Boolean).join(" ");
+    html += `<button class="${cls}" style="left:${x}px;top:${y}px" data-n="${n}" ${open ? "" : "disabled"} aria-label="Bölüm ${n + 1}${joker ? ", joker bölümü" : ""}, ${open ? s + " yıldız" : "kilitli"}">${open ? n + 1 : "🔒"}${s ? `<small>${"★".repeat(s)}${"☆".repeat(3 - s)}</small>` : ""}</button>`;
+  }
+  const [ax, ay] = pt(Math.min(nx, lastShown - 1));
+  html += `<div class="avatar" style="left:${ax}px;top:${ay}px">${esc(up(profile.name[0] || "?"))}</div>`;
+  inner.innerHTML = html;
+  inner.querySelectorAll(".node:not(.locked)").forEach((b) => (b.onclick = () => intro(+b.dataset.n)));
+  $("map-stars").textContent = `★ ${totalStars()}`;
+  const v = $("mapview"); v.scrollTop = Math.max(0, ay + inner.offsetTop - v.clientHeight * 0.55); // start at your current level
+}
+$("map-back").onclick = landing;
+
+// ---- level intro and help ----
+function goalRows(L, left) {
+  return `<div class="goallist">${L.goals.map((g) => `<div>${GOALS[g.type].svg}<span><strong>${GOALS[g.type].name}: ${left ? Math.max(0, left[g.type]) + " kaldı" : g.need}</strong>${GOALS[g.type].how}</span></div>`).join("")}</div>`;
 }
 function intro(n) {
   const L = Core.levelDef(n);
-  card(`<h2>Bölüm ${n + 1}</h2><p>${L.biome} dünyası · ${L.moves} hamle</p>
-    <div class="goallist">${L.goals.map((g) => `<div>${GOALS[g.type].svg}<strong>${g.need}</strong>${GOALS[g.type].name}</div>`).join("")}</div>
-    <p>Her kelime bir hamle. Taş ve buzlar, bulundukları satır, sütun ya da 3×3 kutu patlayınca ya da yanlarında bir patlama olunca darbe alır. Buz iki darbede kırılır.</p>
-    <button class="btn primary" id="i-go">Başla</button>`);
-  $("i-go").onclick = () => startLevel(n);
+  card(`${L.joker ? `<span class="badge">Joker bölümü</span>` : ""}<h2>Bölüm ${n + 1}</h2><p>${L.joker ? "Bol joker ve altın harf, ekstra hediye" : `${L.biome} dünyası`} · ${L.moves} hamle</p>
+    ${goalRows(L)}
+    <p>Hepsini bitirirsen ★★★. Hamle bitince hedeflerin %70'i tamamsa ★★, %40'ı tamamsa ★ ile geçersin.</p>
+    <button class="btn primary big2" id="i-go">Başla</button><button class="btn" id="i-back">Vazgeç</button>`);
+  $("i-go").onclick = () => startLevel(n); $("i-back").onclick = closeCard;
 }
+function helpCard(L) {
+  if (G && !$("app").hidden) busy = true;
+  card(`<h2>${L ? "Bu bölümde" : "Nasıl oynanır?"}</h2>
+    ${L ? goalRows(L, G.left) : ""}
+    <ol class="rules">
+      <li>Harf alanında yan yana, alt alta ya da çapraz duran harfleri kaydırarak 3–6 harfli bir kelime yaz. Her kelime 1 hamle.</li>
+      <li>Çizdiğin yol aynı şekilde bir blok olur ve aşağıdaki kutuya düşer. En fazla 3 blok tutabilirsin.</li>
+      <li>Bloğu sürükleyip tahtaya bırak. Dolu satır, sütun ve 3×3 kutular patlar; art arda patlatmak kombo yapar.</li>
+      <li>Özel harfler: altın puanı ikiye katlar, bomba 3×3 patlatır, joker her harfin yerine geçer, kristal hedeflerde toplanır.</li>
+      <li>Hamlelerin bitmeden hedefleri tamamla: hepsi ★★★, %70'i ★★, %40'ı ★.</li>
+    </ol>
+    <button class="btn primary" id="h-ok">Anladım</button>`);
+  $("h-ok").onclick = () => { closeCard(); if (G && !$("app").hidden) busy = false; };
+}
+$("help").onclick = () => G && helpCard(G.mode === "level" ? G.L : null);
+$("back").onclick = openMap;
 
-// ===================== starting =====================
+// ===================== starting a level or the duel =====================
 function baseState(L, rnd, mode) {
   return { mode, L, rnd, grid: Core.freshGrid(rnd, { rates: L.rates }), board: L.board.slice(), hand: [], score: 0, moves: L.moves,
     left: Object.fromEntries(L.goals.map((g) => [g.type, g.need])), shown: Object.fromEntries(L.goals.map((g) => [g.type, g.need])),
@@ -323,11 +551,12 @@ function startDuel() {
   G.rival = makeRival(); G.running = true; openScreen();
 }
 function openScreen() {
-  path = []; hintPath = [];
-  const theme = G.mode === "duel" ? ["#3A2A7A", "#F28C6B"] : BIOME_THEMES[Math.floor(G.L.n / 10) % 8];
+  closeCard(); show("game"); path = []; hintPath = [];
+  const theme = G.mode === "duel" ? ["#3A2A7A", "#F28C6B"] : G.L.joker ? JOKER_THEME : BIOME_THEMES[Math.floor(G.L.n / 10) % 8];
   $("field").style.setProperty("--c1", theme[0]); $("field").style.setProperty("--c2", theme[1]);
-  $("tagline").textContent = G.mode === "duel" ? "Günlük Düello" : `${G.L.biome} · Bölüm ${G.L.n + 1}`;
-  $("ov").hidden = true; busy = false;
+  $("tagline").textContent = G.mode === "duel" ? "Günlük Düello" : `${G.L.joker ? "Joker" : G.L.biome} · Bölüm ${G.L.n + 1}`;
+  $("help").hidden = G.mode === "duel"; $("back").setAttribute("aria-label", G.mode === "duel" ? "Açılış ekranı" : "Haritaya dön");
+  busy = false;
   say(G.mode === "duel" ? "Süre başladı. Ne kadar çok puan, o kadar iyi." : "Harfleri kaydırıp kelime yaz", "msg");
   buildTiles(true); buildBoard(); renderHand(); renderGoals(); renderBoosters(); renderTop();
 }
@@ -343,6 +572,11 @@ setInterval(() => {
   G.timeLeft = Math.max(0, G.timeLeft - dt); renderTop(); renderGoals();
   if (G.timeLeft <= 0) { G.running = false; timeUp(); }
 }, 100);
+function addScore(p) { // every point also counts down a joker level's score goal
+  G.score += p;
+  if (G.left.score > 0) { G.left.score = Math.max(0, G.left.score - p); G.shown.score = G.left.score; renderGoals(); }
+  renderTop();
+}
 
 // ===================== letter field =====================
 function geo() { const w = $("gridwrap").clientWidth, gap = Math.max(6, w * 0.03), size = (w - gap * (M - 1)) / M; return { w, gap, size, pitch: size + gap }; }
@@ -353,7 +587,7 @@ function newTile(t, g) {
   el.style.width = el.style.height = g.size + "px"; el.style.fontSize = g.size * 0.46 + "px"; $("gridwrap").appendChild(el); return { el };
 }
 function placeTile(tl, i, g) { const [x, y] = pos(i, g); tl.el.style.transform = `translate(${x}px,${y}px)`; return [x, y]; }
-function layoutTiles() { if (!tiles.length) return; const g = geo(); tiles.forEach((tl, i) => { if (!tl) return; tl.el.style.width = tl.el.style.height = g.size + "px"; tl.el.style.fontSize = g.size * 0.46 + "px"; placeTile(tl, i, g); }); }
+function layoutTiles() { if (!tiles.length || $("app").hidden) return; const g = geo(); tiles.forEach((tl, i) => { if (!tl) return; tl.el.style.width = tl.el.style.height = g.size + "px"; tl.el.style.fontSize = g.size * 0.46 + "px"; placeTile(tl, i, g); }); }
 function buildTiles(rain) { // a fresh grid rains in from above, row by row
   tiles.forEach((tl) => tl && tl.el.remove());
   const g = geo();
@@ -417,7 +651,6 @@ function paintCell(i, v = G.board[i]) {
   b.style.background = v && !v.ob ? COLORS[v.color] : "";
 }
 function setGhost(list, cls = "ghost") { ghostCells.forEach((i) => cellEls[i].classList.remove("ghost", "suggest")); ghostCells = list; list.forEach((i) => cellEls[i].classList.add(cls)); }
-const cellColor = (v) => (!v ? "#fff" : v.ob === "stone" ? "#8C8F9E" : v.ob === "ice" ? "#BFE6FF" : COLORS[v.color]);
 
 // ===================== hand, goals, top bar =====================
 function blockEl(p, size, cls) {
@@ -456,16 +689,16 @@ function renderTop() {
   $("t-sub").textContent = `${G.score} puan`;
 }
 function renderBoosters() {
-  $("boosters").innerHTML = Object.keys(BOOSTERS).map((k) => `<button class="booster" data-b="${k}" aria-label="${BOOSTERS[k].name}, ${inv[k] ? inv[k] + " adet" : "reklam izleyerek"}">${icon(k)}${BOOSTERS[k].name}<span class="n${inv[k] ? "" : " ad"}">${inv[k] || "▶"}</span></button>`).join("");
+  $("boosters").innerHTML = Object.keys(BOOSTERS).map((k) => { const n = isAdmin() ? "∞" : inv()[k];
+    return `<button class="booster" data-b="${k}" aria-label="${BOOSTERS[k].name}, ${n ? n + " adet" : "reklam izleyerek"}">${icon(k)}${BOOSTERS[k].name}<span class="n${n ? "" : " ad"}">${n || "▶"}</span></button>`; }).join("");
   $("boosters").querySelectorAll(".booster").forEach((b) => (b.onclick = () => useBooster(b.dataset.b)));
 }
 function say(text, cls) { const w = $("wordline"); w.className = "wordline " + cls; w.textContent = text; }
-// a goal unit flies from (x,y) to its chip; the chip counts down when it lands
-function creditGoal(type, x, y, delay = 0) {
+function creditGoal(type, x, y, delay = 0) { // a goal unit flies from (x,y) to its chip; the chip counts down when it lands
   if (!G.left || !(type in G.left) || G.left[type] <= 0) return;
   G.left[type]--;
   const chip = $("goals").querySelector(`[data-g="${type}"]`); if (!chip) return;
-  flyTo(GOALS[type].svg, x, y, chip, 30, delay).then(() => { G.shown[type] = Math.max(0, G.shown[type] - 1); renderGoals(); const c = $("goals").querySelector(`[data-g="${type}"]`); if (c) bump(c); });
+  flyTo(GOALS[type].svg, x, y, chip, 30, delay).then(() => { G.shown[type] = Math.max(0, G.shown[type] - 1); renderGoals(); bump($("goals").querySelector(`[data-g="${type}"]`)); });
 }
 
 // ===================== swiping words =====================
@@ -476,10 +709,7 @@ function tileAt(x, y) {
   return Math.hypot(x - (r.left + c * g.pitch + g.size / 2), y - (r.top + row * g.pitch + g.size / 2)) < g.size * 0.48 ? row * M + c : null; // round hit zone so diagonal swipes slip between neighbours
 }
 const pattern = () => path.map((i) => Core.letterOf(G.grid[i])).join("");
-function showPath() {
-  const p = pattern(), w = p.length >= 3 ? Core.resolveWord(p) : null;
-  say(p ? up(w || p) : "Harfleri kaydırıp kelime yaz", !p ? "msg" : w ? "ok" : "no"); markPath();
-}
+function showPath() { const p = pattern(), w = p.length >= 3 ? Core.resolveWord(p) : null; say(p ? up(w || p) : "Harfleri kaydırıp kelime yaz", !p ? "msg" : w ? "ok" : "no"); markPath(); }
 $("gridwrap").addEventListener("pointerdown", (e) => {
   if (busy || !G) return;
   if (G.hand.length >= 3) { say("Elin dolu. Önce bir blok yerleştir.", "msg"); bump($("hand")); return; }
@@ -505,19 +735,19 @@ function endSwipe() {
   const p = pattern(), w = p.length >= 3 ? Core.resolveWord(p) : null;
   if (!w) {
     say(p.length < 3 ? "Kelime en az 3 harf olmalı" : `${up(p)} listede yok`, "msg");
-    path.forEach((i) => anim(tiles[i].el, [{ transform: tiles[i].el.style.transform + " translateX(0)" }, { transform: tiles[i].el.style.transform + " translateX(-5px)" }, { transform: tiles[i].el.style.transform + " translateX(5px)" }, { transform: tiles[i].el.style.transform }], { duration: 260 }));
+    path.forEach((i) => { const t0 = tiles[i].el.style.transform; anim(tiles[i].el, [{ transform: t0 }, { transform: t0 + " translateX(-5px)" }, { transform: t0 + " translateX(5px)" }, { transform: t0 }], { duration: 260 }); });
     path = []; markPath(); return;
   }
   const used = path.slice(); path = []; drawTrace();
   const piece = Core.makePiece(G.grid, used); piece.color = G.colorTurn++ % COLORS.length;
   const slotIdx = G.hand.length; G.hand.push(piece);
   const t = performance.now(); G.chain = t - G.lastWordAt < CHAIN_MS ? Math.min(5, G.chain + 1) : 1; G.lastWordAt = t;
-  const pts = w.length * 3 * 2 ** piece.gold * G.chain + (w.length >= 5 ? 15 : 0); G.score += pts;
+  const pts = Core.wordPoints(w, piece, G.chain);
   if (G.mode === "level") { G.moves--; bump($("moves")); }
-  // goal units earned by the word itself fly from their letters
   used.forEach((i, k) => { const kd = Core.kindOf(G.grid[i]), [x, y] = centerOf(tiles[i].el); if (kd === "crystal") creditGoal("crystal", x, y, k * 60); if (kd === "bomb") creditGoal("bomb", x, y, k * 60); });
   if (w.length >= 5) { const [x, y] = centerOf($("wordline")); creditGoal("long", x, y); }
   const [wx, wy] = centerOf(tiles[used[used.length - 1]].el); popNum(`+${pts}`, wx, wy - 10);
+  addScore(pts);
   const parts = [`${up(w)} +${pts}`]; if (G.chain > 1) parts.push(`Seri x${G.chain}`); if (piece.gold) parts.push("Altın");
   say(parts.join(" · "), "ok");
   const res = Core.collapse(G.grid, used, G.rnd, { rates: G.L.rates, plantRate: G.L.plantRate });
@@ -527,7 +757,7 @@ function endSwipe() {
     const j = plain[Math.floor(Math.random() * plain.length)]; G.grid[j] = "?"; setTile(tiles[j].el, "?"); const [x, y] = centerOf(tiles[j].el); burst(x, y, "#FFB627", 14, 0.6); toast("Seri ödülü: bir harf Joker oldu");
   }, 700);
   setTimeout(() => renderHand(slotIdx), RM ? 0 : 420);
-  renderTop(); setTimeout(afterTurn, RM ? 0 : 700);
+  setTimeout(afterTurn, RM ? 0 : 700);
 }
 
 // ===================== dragging and placing blocks =====================
@@ -565,22 +795,19 @@ async function placeBlock(k, p, at) {
   const res = Core.place(G.board, p, at[0], at[1], p.color), placed = p.cells.map(([r, c]) => (at[0] + r) * B + at[1] + c);
   G.hand.splice(k, 1); renderHand();
   placed.forEach((i, j) => { paintCell(i, { color: p.color }); anim(cellEls[i].firstChild, [{ transform: "scale(.3)" }, { transform: "scale(1.15)", offset: 0.6 }, { transform: "scale(1)" }], { duration: 260, delay: j * 30, easing: "ease-out" }); });
-  G.score += p.cells.length;
+  addScore(p.cells.length);
   const hits = [...res.cleared, ...res.cracked];
   if (hits.length) {
     await wait(220);
     const cr = placed.reduce((a, i) => a + ((i / B) | 0), 0) / placed.length, cc = placed.reduce((a, i) => a + (i % B), 0) / placed.length;
     if (res.lines) G.combo++; else if (!res.bombed.length) G.combo = 0;
-    const pts = (res.lines ? 20 * res.lines * res.lines * Math.max(1, G.combo) : 0) + res.bombed.length * 5 + res.broken.length * 10;
-    G.score += pts;
+    const pts = Core.clearPoints(res, G.combo);
     let maxD = 0;
-    for (const i of hits) {
-      const d = Math.hypot(((i / B) | 0) - cr, (i % B) - cc); maxD = Math.max(maxD, d);
-      setTimeout(() => explodeCell(i, res), RM ? 0 : d * 34); // the clear spreads out from where the block landed
-    }
+    for (const i of hits) { const d = Math.hypot(((i / B) | 0) - cr, (i % B) - cc); maxD = Math.max(maxD, d); setTimeout(() => explodeCell(i, res), RM ? 0 : d * 34); } // the clear spreads out from where the block landed
     try { navigator.vibrate?.(res.bombed.length ? 45 : res.lines >= 2 ? 25 : 12); } catch {} // a small buzz on Android; iOS ignores it
     const [bx, by] = centerOf(cellEls[placed[Math.floor(placed.length / 2)]]);
-    popNum(`+${pts}`, bx, by - 20);
+    if (pts) popNum(`+${pts}`, bx, by - 20);
+    addScore(pts);
     if (res.bombed.length) { const bi = (at[0] + p.cells[p.bombIdx][0]) * B + at[1] + p.cells[p.bombIdx][1], [x, y] = centerOf(cellEls[bi]); shockwave(x, y); shake(10); burst(x, y, "#FFD27A", 30, 1.2); }
     else if (res.lines >= 2) shake(3 + res.lines * 2);
     if (res.lines >= 3) bigText("MÜTHİŞ!"); else if (G.combo >= 2) bigText(`KOMBO x${G.combo}`); else if (res.lines === 2) bigText("İKİ BİRDEN!");
@@ -607,7 +834,7 @@ function explodeCell(i, res) {
     .then(() => { paintCell(i, null); anim(cellEls[i].firstChild, [{ opacity: 0 }, { opacity: 1 }], { duration: 160 }); });
   if (broken) creditGoal(broken.ob, x, y);
 }
-function gift(k, why) { inv[k]++; saveAll(); renderBoosters(); toast(`${why} ödülü: +1 ${BOOSTERS[k].name}`); bump($("boosters").querySelector(`[data-b="${k}"]`)); }
+function gift(k, why) { inv()[k]++; saveProfile(); renderBoosters(); toast(`${why} ödülü: +1 ${BOOSTERS[k].name}`); bump($("boosters").querySelector(`[data-b="${k}"]`)); }
 
 // ===================== boosters =====================
 function useBooster(k) {
@@ -629,61 +856,66 @@ function useBooster(k) {
     }
     afterTurn();
   };
-  if (inv[k] > 0) { inv[k]--; saveAll(); renderBoosters(); apply(); } else fakeAd(() => { renderBoosters(); apply(); });
+  if (isAdmin()) return apply();
+  if (inv()[k] > 0) { inv()[k]--; saveProfile(); renderBoosters(); apply(); } else fakeAd(() => { renderBoosters(); apply(); });
 }
 function fakeAd(reward) {
   busy = true;
   card(`<p>Reklam simülasyonu</p><div class="big">▶</div><p>Gerçek oyunda burada ödüllü video oynar.</p>`);
-  setTimeout(() => { $("ov").hidden = true; busy = false; lastTick = performance.now(); reward(); }, AD_MS);
+  setTimeout(() => { closeCard(); busy = false; lastTick = performance.now(); reward(); }, AD_MS);
 }
 
-// ===================== turn end, win, fail =====================
+// ===================== turn end, stars, fail =====================
 const goalsDone = () => G.mode === "level" && Object.values(G.left).every((v) => v <= 0);
 function anyWordFits() { for (const [, p] of Core.findWords(G.grid)) if (Core.fits(G.board, Core.makePiece(G.grid, p))) return true; return false; }
 function afterTurn() {
-  if (!G || busy) return;
-  if (goalsDone()) { busy = true; return setTimeout(levelWon, RM ? 0 : 900); }
-  const handFits = G.hand.some((p) => Core.fits(G.board, p));
-  if (handFits) return;
+  if (!G || busy || $("app").hidden) return;
+  if (goalsDone()) { busy = true; return setTimeout(() => levelEnd(3, true), RM ? 0 : 900); }
+  if (G.hand.some((p) => Core.fits(G.board, p))) return;
   if (G.mode === "level" && G.moves <= 0) return setTimeout(outOfMoves, 300);
   if (G.hand.length < 3 && anyWordFits()) return;
   setTimeout(noRoom, 300);
 }
+function partialRows() { return `<div class="goallist">${G.L.goals.map((g) => `<div>${GOALS[g.type].svg}<span><strong>${GOALS[g.type].name}: ${g.need - Math.max(0, G.left[g.type])} / ${g.need}</strong></span></div>`).join("")}</div>`; }
 function outOfMoves() {
   busy = true;
-  card(`<h2>Hamle bitti</h2><div class="goallist">${G.L.goals.filter((g) => G.left[g.type] > 0).map((g) => `<div>${GOALS[g.type].svg}<strong>${G.left[g.type]}</strong>kaldı</div>`).join("")}</div>
-    <p>Az kaldı. 5 hamle daha ile bitirebilirsin.</p>
-    <button class="btn primary" id="o-ad">Reklam izle: +5 hamle</button><button class="btn" id="o-retry">Bölümü yeniden başlat</button><button class="btn" id="o-home">Ana menü</button>`);
+  const s = Core.starsFor(G.L, G.left);
+  card(`<h2>Hamle bitti</h2><div class="stars">${[1, 2, 3].map((k) => star(k <= s, 36)).join("")}</div>${partialRows()}
+    <p>${s ? `${s} yıldızla geçebilirsin. 5 hamle daha ile üç yıldız alabilirsin.` : "Geçmek için hedeflerin en az %40'ı lazım."}</p>
+    <button class="btn primary" id="o-ad">Reklam izle: +5 hamle</button>
+    ${s ? `<button class="btn" id="o-take">${s} yıldızla bitir</button>` : `<button class="btn" id="o-retry">Yeniden başla</button>`}<button class="btn" id="o-map">Harita</button>`);
   $("o-ad").onclick = () => fakeAd(() => { G.moves += 5; G.extraMoves += 5; renderTop(); bump($("moves")); afterTurn(); });
-  $("o-retry").onclick = () => startLevel(G.L.n); $("o-home").onclick = home;
+  if (s) $("o-take").onclick = () => levelEnd(s, false); else $("o-retry").onclick = () => startLevel(G.L.n);
+  $("o-map").onclick = openMap;
 }
 function noRoom() {
   busy = true;
-  const canDiscard = G.hand.length > 0;
-  card(`<h2>Yer kalmadı</h2><p>Tahtada bu blokları koyacak yer yok.</p>
+  const canDiscard = G.hand.length > 0, s = G.mode === "level" ? Core.starsFor(G.L, G.left) : 0;
+  card(`<h2>Yer kalmadı</h2><p>Tahtada bu blokları koyacak yer yok.</p>${G.mode === "level" ? partialRows() : ""}
     <button class="btn primary" id="o-ad">Reklam izle: ${canDiscard ? "bloklarını at" : "yeni harfler al"}</button>
-    <button class="btn" id="o-retry">${G.mode === "duel" ? "Bitir" : "Bölümü yeniden başlat"}</button><button class="btn" id="o-home">Ana menü</button>`);
+    ${G.mode === "duel" ? `<button class="btn" id="o-end">Bitir</button>` : s ? `<button class="btn" id="o-take">${s} yıldızla bitir</button>` : `<button class="btn" id="o-retry">Yeniden başla</button>`}<button class="btn" id="o-map">${G.mode === "duel" ? "Ana ekran" : "Harita"}</button>`);
   $("o-ad").onclick = () => fakeAd(() => { if (canDiscard) { G.hand = []; renderHand(); } else { G.grid = Core.freshGrid(G.rnd, { rates: G.L.rates }); respinTiles(); } afterTurn(); });
-  $("o-retry").onclick = () => (G.mode === "duel" ? finishDuel() : startLevel(G.L.n)); $("o-home").onclick = home;
+  if ($("o-end")) $("o-end").onclick = finishDuel; if ($("o-take")) $("o-take").onclick = () => levelEnd(s, false); if ($("o-retry")) $("o-retry").onclick = () => startLevel(G.L.n);
+  $("o-map").onclick = G.mode === "duel" ? landing : openMap;
 }
 const GIFTS_PER_STAR = { 1: ["karistir"], 2: ["ipucu"], 3: ["yenile", "joker"] };
-function levelWon() {
+function levelEnd(stars, finishedAll) {
   busy = true;
-  const L = G.L, left = Math.max(0, G.moves - G.extraMoves), ratio = left / L.moves;
-  const stars = 1 + (ratio >= 0.25) + (ratio >= 0.5), bonus = G.moves * 20, prev = prog.stars[L.n] || 0;
+  const L = G.L, bonus = finishedAll ? G.moves * 20 : 0, prev = profile.stars[L.n] || 0;
   const gifts = []; for (let s = prev + 1; s <= stars; s++) gifts.push(...GIFTS_PER_STAR[s]); // only newly earned stars pay out
-  gifts.forEach((k) => inv[k]++);
+  if (L.joker && !prev) gifts.push(...["karistir", "yenile", "ipucu", "joker"].sort(() => Math.random() - 0.5).slice(0, 2)); // joker levels give two extra gifts the first time
+  gifts.forEach((k) => inv()[k]++);
   const final = G.score + bonus;
-  prog.stars[L.n] = Math.max(prev, stars); prog.best[L.n] = Math.max(prog.best[L.n] || 0, final); saveAll(); renderBoosters();
+  profile.stars[L.n] = Math.max(prev, stars); profile.best[L.n] = Math.max(profile.best[L.n] || 0, final); saveProfile(); renderBoosters();
   confetti();
   card(`<div class="stars">${[1, 2, 3].map((s, i) => star(s <= stars).replace("<svg", `<svg style="animation-delay:${0.2 + i * 0.25}s"`)).join("")}</div>
-    <h2>Bölüm ${L.n + 1} tamam!</h2><div class="big" id="o-score">${G.score}</div>
-    <p>${G.moves ? `Kalan ${G.moves} hamle × 20 = +${bonus}` : "Son hamlede bitirdin."}</p>
-    ${gifts.length ? `<h3>Hediyeler</h3><div class="gifts">${gifts.map((k, i) => `<div class="gift" style="animation-delay:${0.9 + i * 0.18}s">${icon(k)}<strong>+1</strong>${BOOSTERS[k].name}</div>`).join("")}</div>` : `<p>Bu bölümün hediyelerini almıştın. Daha çok yıldız, daha çok hediye.</p>`}
-    <button class="btn primary" id="o-next">Sonraki bölüm</button><button class="btn" id="o-again">Tekrar oyna</button><button class="btn" id="o-map">Bölüm haritası</button>`);
+    <h2>Bölüm ${L.n + 1} ${stars === 3 ? "tamam!" : "geçildi"}</h2><div class="big" id="o-score">${G.score}</div>
+    <p>${finishedAll ? (G.moves ? `Kalan ${G.moves} hamle × 20 = +${bonus}` : "Son hamlede bitirdin.") : `Hedeflerin bir kısmı kaldı. Tekrar oynayıp ${stars + 1}. yıldızı alabilirsin.`}</p>
+    ${gifts.length ? `<h3>Hediyeler</h3><div class="gifts">${gifts.map((k, i) => `<div class="gift" style="animation-delay:${0.9 + i * 0.18}s">${icon(k)}<strong>+1</strong>${BOOSTERS[k].name}</div>`).join("")}</div>` : `<p>Bu yıldızların hediyelerini almıştın. Daha çok yıldız, daha çok hediye.</p>`}
+    <button class="btn primary" id="o-next">Sonraki bölüm</button><div class="row2"><button class="btn" id="o-again">Tekrar</button><button class="btn" id="o-map">Harita</button></div>`);
   const sc = $("o-score"), t0 = performance.now(); // count the move bonus up
   (function count(t) { const f = Math.min(1, (t - t0) / 900); sc.textContent = Math.round(G.score + bonus * f); if (f < 1 && !RM) requestAnimationFrame(count); else sc.textContent = final; })(t0);
-  $("o-next").onclick = () => intro(L.n + 1); $("o-again").onclick = () => startLevel(L.n); $("o-map").onclick = map;
+  $("o-next").onclick = () => intro(L.n + 1); $("o-again").onclick = () => startLevel(L.n); $("o-map").onclick = openMap;
 }
 function timeUp() {
   busy = true;
@@ -698,20 +930,20 @@ function timeUp() {
 function finishDuel() {
   busy = true; G.running = false;
   const rv = G.rival.at(DUEL_SECONDS), win = G.score > rv;
-  prog.duelBest = Math.max(prog.duelBest || 0, G.score); saveAll();
+  profile.duelBest = Math.max(profile.duelBest || 0, G.score); saveProfile();
   if (win) confetti();
   const day = NOW.toLocaleDateString("tr-TR", { day: "numeric", month: "short" });
   const share = `Shapeword Düello · ${day}\n${G.score} – ${rv} ${G.rival.name}\n${win ? "🏆 Kazandım" : "Bu sefer kaybettim"}${G.extended ? " (+15 sn)" : ""}`;
   card(`<h2>${win ? "Kazandın!" : `${G.rival.name} kazandı`}</h2>
     <div class="vs"><div class="${win ? "win" : ""}"><strong>${G.score}</strong><span>Sen</span></div><p>–</p><div class="${win ? "" : "win"}"><strong>${rv}</strong><span>${G.rival.name}</span></div></div>
     <textarea class="share" id="o-share" rows="3" readonly aria-label="Paylaşım metni">${share}</textarea>
-    <button class="btn primary" id="o-copy">Sonucu kopyala</button><button class="btn" id="o-again">Tekrar dene</button><button class="btn" id="o-home">Ana menü</button>`);
+    <button class="btn primary" id="o-copy">Sonucu kopyala</button><div class="row2"><button class="btn" id="o-again">Tekrar</button><button class="btn" id="o-home">Ana ekran</button></div>`);
   $("o-copy").onclick = () => navigator.clipboard.writeText(share).then(() => ($("o-copy").textContent = "Kopyalandı")).catch(() => { $("o-share").select(); $("o-copy").textContent = "Seçildi, kopyala"; });
-  $("o-again").onclick = startDuel; $("o-home").onclick = home;
+  $("o-again").onclick = startDuel; $("o-home").onclick = landing;
 }
+$("back").onclick = () => (G && G.mode === "duel" ? landing() : openMap());
 
-$("back").onclick = home;
-G = baseState(Core.levelDef(nextLevel()), Math.random, "level"); openScreen(); home();
+landing();
 </script>
 </body>
 </html>
