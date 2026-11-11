@@ -74,7 +74,8 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
 
 // ===================== device settings, profile, local + cloud save =====================
 const store = { get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
-const prefs = { sfx: true, amb: true, vib: true, easy: true, ...store.get("sw4:prefs", {}) }; // per device, not per player
+const prefs = { sfx: true, amb: true, vib: true, ...store.get("sw4:prefs", {}) };
+if (!["renk", "rahat", "klasik"].includes(prefs.mode)) prefs.mode = prefs.easy === false ? "klasik" : "rahat"; // how a level is played: colour chains, words with help, or words alone // per device, not per player
 snd.set(prefs);
 const buzz = (ms) => { if (prefs.vib) try { navigator.vibrate?.(ms); } catch {} }; // Android only; iOS ignores it
 for (const ev of ["pointerup", "touchend", "click", "keydown"]) addEventListener(ev, () => snd.unlock(), true); // browsers only start audio inside a gesture; a finger going down is not one yet, lifting it is (iOS: touchend)
@@ -446,7 +447,7 @@ $("gear").onclick = () => settings();
 
 // ---- settings (and the hidden admin tools) ----
 function settings() {
-  const togs = [["sfx", "Ses efektleri"], ["amb", "Ortam sesi"], ["vib", "Titreşim"], ["easy", "Rahat mod: bulunabilecek kelimeler gösterilir"]];
+  const togs = [["sfx", "Ses efektleri"], ["amb", "Ortam sesi"], ["vib", "Titreşim"]];
   card(`<h2>Ayarlar</h2>
     <div class="faces" id="s-faces"></div><input type="file" id="s-file" accept="image/*" hidden>
     <p class="hint">Karakterin ya da fotoğrafının küçük bir kopyası sıralamada ve haritada diğer oyunculara görünür.</p>
@@ -581,11 +582,11 @@ function intro(n) {
     <div class="stars">${[1, 2, 3].map((k) => star(k <= (profile.stars[n] || 0), 34)).join("")}</div>
     <p class="rec">${rec ? (rec.me ? `Rekor sende: ${rec.score} puan` : `Rekor: ${esc(rec.name)} · ${rec.score} puan`) : "Bu bölümde henüz rekor yok"}</p>
     ${ws ? `<p class="wsline">${svgIcon(ICONS.flame)}Galibiyet serisi ×${ws}: ${["joker", "joker ve altın harf", "joker, altın ve bomba harfi"][ws - 1]} ile başlıyorsun</p>` : "<p>Hepsini bitir ★★★ · %70 ★★ · %40 ★</p>"}
-    <div class="tabs" id="i-mode" role="tablist" aria-label="Oyun modu"><button role="tab" data-e="1" aria-selected="${!!prefs.easy}">Rahat</button><button role="tab" data-e="" aria-selected="${!prefs.easy}">Klasik</button></div>
+    <div class="tabs" id="i-mode" role="tablist" aria-label="Oyun modu">${[["renk", "Renk"], ["rahat", "Rahat"], ["klasik", "Klasik"]].map(([k, t]) => `<button role="tab" data-m="${k}" aria-selected="${prefs.mode === k}">${t}</button>`).join("")}</div>
     <p class="modenote" id="i-note"></p>
     <button class="b3 xl green" id="i-go">Başla</button><button class="b3 ghost" id="i-back">Vazgeç</button>`, theme);
-  const note = () => ($("i-note").textContent = prefs.easy ? "Rahat: yazabileceğin kelimeler gösterilir; dokununca harfleri parlar. Rekor ve lig puanı yazılmaz." : "Klasik: kelimeleri kendin bulursun. Rekor ve lig puanı yazılır.");
-  $("i-mode").querySelectorAll("button").forEach((b) => (b.onclick = () => { prefs.easy = !!b.dataset.e; store.set("sw4:prefs", prefs); $("i-mode").querySelectorAll("button").forEach((x) => x.setAttribute("aria-selected", x === b)); note(); snd.play("toggle"); }));
+  const note = () => ($("i-note").textContent = { renk: "Renk: kelime yok. Aynı renkten en az 3 taşı birleştir, çizdiğin yol blok olsun. Rekor ve lig puanı yazılmaz.", rahat: "Rahat: yazabileceğin kelimeler gösterilir; dokununca harfleri parlar. Rekor ve lig puanı yazılmaz.", klasik: "Klasik: kelimeleri kendin bulursun. Rekor ve lig puanı yazılır." }[prefs.mode]);
+  $("i-mode").querySelectorAll("button").forEach((b) => (b.onclick = () => { prefs.mode = b.dataset.m; store.set("sw4:prefs", prefs); $("i-mode").querySelectorAll("button").forEach((x) => x.setAttribute("aria-selected", x === b)); note(); snd.play("toggle"); }));
   note();
   $("i-go").onclick = () => startLevel(n); $("i-back").onclick = closeCard; playDemo();
 }
@@ -608,14 +609,14 @@ function helpCard(L) {
 $("help").onclick = () => G && helpCard(G.mode === "level" ? G.L : null);
 
 // ===================== starting a level or the duel =====================
-function baseState(L, rnd, mode) {
+function baseState(L, rnd, mode, hues = false) { // hues: the wordless mode, colour chains instead of words
   const left = Object.fromEntries(L.goals.map((g) => [g.type, g.need]));
-  return { mode, L, rnd, grid: Core.freshGrid(rnd, { rates: L.rates, ensure: Core.ensureFor(left) }), board: L.board.slice(), hand: [], score: 0, moves: L.moves, left, shown: { ...left },
+  return { mode, L, rnd, hues, grid: Core.freshGrid(rnd, { rates: L.rates, ensure: Core.ensureFor(left), hues }), board: L.board.slice(), hand: [], score: 0, moves: L.moves, left, shown: { ...left },
     combo: 0, chain: 0, lastWordAt: -1e9, colorTurn: 0, running: false, timeLeft: DUEL_SECONDS, extended: false, rival: null, extraMoves: 0, rec: null, passed: false, tickAt: 11 };
 }
 function startLevel(n) {
   abandon();
-  G = baseState(Core.levelDef(n), Math.random, "level"); G.rec = recordOf(n); G.easy = !!prefs.easy;
+  G = baseState(Core.levelDef(n), Math.random, "level", prefs.mode === "renk"); G.rec = recordOf(n); G.easy = prefs.mode === "rahat"; G.casual = prefs.mode !== "klasik";
   if (!G.L.joker) streakTiles(G.grid, Math.min(Meta.STREAK.length, meta().ws || 0));
   openScreen();
 }
@@ -641,7 +642,7 @@ function openScreen() {
   $("tagline").innerHTML = G.mode === "duel" ? (G.duel.kind === "daily" ? "Günlük Düello" : "Meydan okuma") : `<b>Bölüm ${G.L.n + 1}</b>${G.L.joker ? "Joker" : G.L.biome}`;
   $("help").hidden = G.mode === "duel"; $("back").setAttribute("aria-label", G.mode === "duel" ? "Ana ekran" : "Haritaya dön");
   busy = false; lastTick = performance.now();
-  say(G.mode === "duel" ? "Süre başladı. Ne kadar çok puan, o kadar iyi." : "Harfleri kaydırıp kelime yaz", "msg");
+  say(G.mode === "duel" ? "Süre başladı. Ne kadar çok puan, o kadar iyi." : idleText(), "msg");
   buildTiles(true); buildBoard(); renderHand(); renderGoals(); renderBoosters(); renderTop(); snd.play("start");
 }
 // The daily rival: the best real player who already played today, else a simulated one. A real rival's score follows the recording of that run when there is one.
@@ -675,7 +676,8 @@ function addScore(p) { // every point also counts down a joker level's score goa
 // ===================== letter field =====================
 function geo() { const el = $("gridwrap"), w = el.clientWidth, h = el.clientHeight, gap = Math.max(6, h * 0.03), size = (h - gap * (M - 1)) / M, sx = (w - gap * (M - 1)) / M; return { w, h, gap, size, sx, pitch: size + gap, px: sx + gap }; }
 const pos = (i, g) => [(i % M) * g.px, ((i / M) | 0) * g.pitch];
-function setTile(el, t) { el.className = "tile " + Core.kindOf(t); el.firstChild.textContent = Core.letterOf(t); }
+const SHAPES = "●▲■◆★";
+function setTile(el, t) { const ch = Core.letterOf(t), hue = ch >= "1" && ch <= "5"; el.className = "tile " + Core.kindOf(t) + (hue ? " hue h" + ch : ""); el.firstChild.textContent = hue ? SHAPES[ch - 1] : ch; }
 function newTile(t, g) {
   const el = document.createElement("div"); el.appendChild(document.createElement("span")); setTile(el, t);
   el.style.width = g.sx + "px"; el.style.height = g.size + "px"; el.style.fontSize = g.size * 0.52 + "px"; $("gridwrap").appendChild(el); return { el };
@@ -829,7 +831,10 @@ function tileAt(x, y) {
   return Math.hypot((x - (r.left + c * g.px + g.sx / 2)) / g.sx, (y - (r.top + row * g.pitch + g.size / 2)) / g.size) < 0.48 ? row * M + c : null; // oval hit zone so diagonal swipes slip between neighbours
 }
 const pattern = () => path.map((i) => Core.letterOf(G.grid[i])).join("");
-function showPath() { const p = pattern(), w = p.length >= 3 ? Core.resolveWord(p) : null; say(p ? up(w || p) : "Harfleri kaydırıp kelime yaz", !p ? "msg" : w ? "ok" : "no"); markPath(); }
+const resolve = (p) => (G.hues ? Core.resolveChain(p) : Core.resolveWord(p)), finder = () => (G.hues ? Core.findChains : Core.findWords);
+const idleText = () => (G.hues ? "Aynı renkten en az 3 taşı birleştir" : "Harfleri kaydırıp kelime yaz");
+const hueFits = (i) => { const hs = [...pattern(), Core.letterOf(G.grid[i])].filter((ch) => ch !== "?"); return hs.every((h) => h === hs[0]); }; // a chain cannot take a tile of another colour
+function showPath() { const p = pattern(), w = p.length >= 3 ? resolve(p) : null; say(!p ? idleText() : G.hues ? `${p.length} taş${w ? "" : " · en az 3"}` : up(w || p), !p ? "msg" : w ? "ok" : "no"); markPath(); }
 $("gridwrap").addEventListener("pointerdown", (e) => {
   if (busy || !G) return;
   if (G.hand.length >= 3) { say("Elin dolu. Önce bir blok yerleştir.", "msg"); bump($("hand")); return; }
@@ -845,7 +850,7 @@ function visitTile(x, y) {
   const i = tileAt(x, y), last = path[path.length - 1];
   if (i === null || i === last) return false;
   if (path.length > 1 && i === path[path.length - 2]) { path.pop(); snd.play("letterBack", path.length); return true; }
-  if (!path.includes(i) && Core.adjacent(last, i) && path.length < MAX_LEN) { path.push(i); snd.play("letter", path.length - 1); return true; }
+  if (!path.includes(i) && Core.adjacent(last, i) && path.length < MAX_LEN && (!G.hues || hueFits(i))) { path.push(i); snd.play("letter", path.length - 1); return true; }
   return false;
 }
 function traceTo(x, y) {
@@ -867,9 +872,9 @@ addEventListener("pointercancel", () => { if (swiping) endSwipe(); if (drag) dro
 
 function endSwipe() {
   swiping = false;
-  const p = pattern(), w = p.length >= 3 ? Core.resolveWord(p) : null;
+  const p = pattern(), w = p.length >= 3 ? resolve(p) : null;
   if (!w) {
-    say(p.length < 3 ? "Kelime en az 3 harf olmalı" : `${up(p)} listede yok`, "msg"); snd.play("wordBad");
+    say(G.hues ? "En az 3 taş birleştir" : p.length < 3 ? "Kelime en az 3 harf olmalı" : `${up(p)} listede yok`, "msg"); snd.play("wordBad");
     path.forEach((i) => { const t0 = tiles[i].el.style.transform; anim(tiles[i].el, [{ transform: t0 }, { transform: t0 + " translateX(-5px)" }, { transform: t0 + " translateX(5px)" }, { transform: t0 }], { duration: 260 }); });
     path = []; markPath(); return;
   }
@@ -887,9 +892,9 @@ function endSwipe() {
   if (pr.long) credit("long", 1, [centerOf($("wordline"))]);
   const [wx, wy] = centerOf(tiles[used[used.length - 1]].el); popNum(`+${pts}`, wx, wy - 10);
   addScore(pts);
-  const parts = [`${up(w)} +${pts}`]; if (G.chain > 1) parts.push(`Seri x${G.chain}`); if (piece.gold) parts.push("Altın");
+  const parts = [`${G.hues ? w.length + " taş" : up(w)} +${pts}`]; if (G.chain > 1) parts.push(`Seri x${G.chain}`); if (piece.gold) parts.push("Altın");
   say(parts.join(" · "), "ok");
-  const res = Core.collapse(G.grid, used, G.rnd, { rates: G.L.rates, plantRate: G.L.plantRate, ensure: Core.ensureFor(G.left) });
+  const res = Core.collapse(G.grid, used, G.rnd, { rates: G.L.rates, plantRate: G.L.plantRate, ensure: Core.ensureFor(G.left), hues: G.hues });
   animateWord(used, res, slotIdx); G.grid = res.grid;
   if (G.chain === 4) setTimeout(() => { makeJoker("#FFB627"); toast("Seri ödülü: bir harf Joker oldu"); }, 700); // fast streak reward
   setTimeout(() => { renderHand(slotIdx); snd.play("blockPop"); }, RM ? 0 : 420);
@@ -1023,11 +1028,11 @@ function useBooster(k) {
   if (k === "ipucu" && G.mode === "level" && G.moves <= 0) { say("Hamle kalmadı.", "msg"); return; }
   const apply = () => {
     snd.play("booster");
-    if (k === "karistir") { G.grid = Core.shuffleGrid(G.grid, G.rnd); respinTiles(); }
-    if (k === "yenile") { G.grid = Core.freshGrid(G.rnd, { rates: G.L.rates, ensure: Core.ensureFor(G.left) }); respinTiles(); }
+    if (k === "karistir") { G.grid = Core.shuffleGrid(G.grid, G.rnd, G.hues); respinTiles(); }
+    if (k === "yenile") { G.grid = Core.freshGrid(G.rnd, { rates: G.L.rates, ensure: Core.ensureFor(G.left), hues: G.hues }); respinTiles(); }
     if (k === "joker") makeJoker("#9B5DE5");
     if (k === "ipucu") {
-      const open = Object.fromEntries(Object.entries(G.left).filter(([, v]) => v > 0)), h = Core.bestMove(G.grid, G.board, open);
+      const open = Object.fromEntries(Object.entries(G.left).filter(([, v]) => v > 0)), h = Core.bestMove(G.grid, G.board, open, finder());
       hintPath = h ? h.path : []; markHint();
       if (h) { const pc = Core.makePiece(G.grid, h.path); setGhost(pc.cells.map(([a, b]) => (h.r + a) * B + h.c + b), "suggest"); }
       say(h ? "Parlayan harfleri sırayla takip et; yeşil çerçeve bloğun en iyi yeri" : "Şu an sığan kelime yok. Yenile'yi dene.", "msg");
@@ -1054,7 +1059,7 @@ function fakeAd(reward) {
 
 // ===================== turn end, stars, fail =====================
 const goalsDone = () => G.mode === "level" && Object.values(G.left).every((v) => v <= 0);
-function anyWordFits() { for (const [, p] of Core.findWords(G.grid)) if (Core.fits(G.board, Core.makePiece(G.grid, p))) return true; return false; }
+function anyWordFits() { for (const [, p] of finder()(G.grid)) if (Core.fits(G.board, Core.makePiece(G.grid, p))) return true; return false; }
 function afterTurn() {
   if (!G || busy || $("app").hidden) return;
   if (goalsDone()) { busy = true; return setTimeout(() => levelEnd(3, true), RM ? 0 : 900); }
@@ -1085,7 +1090,7 @@ function noRoom() {
     <button class="b3 xl" id="o-ad">▶ Reklam izle: ${canDiscard ? "bloklarını at" : "yeni harfler al"}</button>
     ${canPay(Meta.COST.rescue) ? `<button class="b3 blue" id="o-tok">${COIN}${Meta.COST.rescue} jeton: ${canDiscard ? "bloklarını at" : "yeni harfler al"}</button>${purse()}` : ""}
     ${G.mode === "duel" ? `<button class="b3 blue" id="o-end">Bitir</button>` : s ? `<button class="b3 green" id="o-take">${s} yıldızla bitir</button>` : `<button class="b3 blue" id="o-retry">Yeniden başla</button>`}<button class="b3 ghost" id="o-map">${G.mode === "duel" ? "Ana ekran" : "Harita"}</button>`);
-  const rescue = () => { if (canDiscard) { G.hand = []; renderHand(); } else { G.grid = Core.freshGrid(G.rnd, { rates: G.L.rates, ensure: Core.ensureFor(G.left) }); respinTiles(); } afterTurn(); };
+  const rescue = () => { if (canDiscard) { G.hand = []; renderHand(); } else { G.grid = Core.freshGrid(G.rnd, { rates: G.L.rates, ensure: Core.ensureFor(G.left), hues: G.hues }); respinTiles(); } afterTurn(); };
   $("o-ad").onclick = () => fakeAd(rescue);
   if ($("o-tok")) $("o-tok").onclick = () => { if (spend(Meta.COST.rescue)) { closeCard(); busy = false; lastTick = performance.now(); rescue(); } };
   if ($("o-end")) $("o-end").onclick = finishDuel; if ($("o-take")) $("o-take").onclick = () => levelEnd(s, false); if ($("o-retry")) $("o-retry").onclick = () => startLevel(G.L.n);
@@ -1098,17 +1103,17 @@ function levelEnd(stars, finishedAll) {
   const gifts = []; for (let s = prev + 1; s <= stars; s++) gifts.push(...GIFTS_PER_STAR[s]); // only newly earned stars pay out
   if (L.joker && !prev) gifts.push(...["karistir", "yenile", "ipucu", "joker"].sort(() => Math.random() - 0.5).slice(0, 2)); // joker levels give two extra gifts the first time
   gifts.forEach((k) => inv()[k]++);
-  const gain = G.easy ? 0 : Math.max(0, final - prevBest), beat = !G.easy && rec && !rec.me && final > rec.score; addWeek(gain);
+  const gain = G.casual ? 0 : Math.max(0, final - prevBest), beat = !G.casual && rec && !rec.me && final > rec.score; addWeek(gain);
   const m = meta(), tok = stars > prev ? (stars - prev) * Meta.PAY.star : Meta.PAY.replay; // new stars pay; a replay pays a little
   G.ended = true; m.tokens += tok; m.ws = Math.min(Meta.STREAK.length, (m.ws || 0) + 1); quest("win"); if (stars === 3) quest("three");
-  profile.stars[L.n] = Math.max(prev, stars); if (!G.easy) profile.best[L.n] = Math.max(prevBest, final); saveProfile(); renderBoosters();
+  profile.stars[L.n] = Math.max(prev, stars); if (!G.casual) profile.best[L.n] = Math.max(prevBest, final); saveProfile(); renderBoosters();
   const chestLine = pendingChests().length ? "Sandığın hazır: ana ekranda aç" : `Yıldız sandığı ★ ${totalStars() % Meta.STAR_STEP} / ${Meta.STAR_STEP}`;
   confetti(); snd.play("win", stars); for (let s = 1; s <= stars; s++) setTimeout(() => snd.play("star", s), 200 + (s - 1) * 250); if (beat) setTimeout(() => snd.play("record"), 1200);
   const recLine = beat ? `${esc(rec.name)} geride kaldı: bu bölümün rekoru artık sende!` : rec && !rec.me ? `Rekor hâlâ ${esc(rec.name)}'de: ${rec.score} puan` : prevBest && gain ? "Kendi rekorunu geçtin" : "";
   card(`<div class="lvlhead"><div class="stars">${[1, 2, 3].map((s, i) => star(s <= stars).replace("<svg", `<svg style="animation-delay:${0.2 + i * 0.25}s"`)).join("")}</div>
     <h2>Bölüm ${L.n + 1} ${stars === 3 ? "tamam!" : "geçildi"}</h2></div><div class="big" id="o-score">${G.score}</div>
     <p>${finishedAll ? (G.moves ? `Kalan ${G.moves} hamle × 20 = +${bonus}` : "Son hamlede bitirdin.") : `Hedeflerin bir kısmı kaldı. Tekrar oynayıp ${stars + 1}. yıldızı alabilirsin.`}</p>
-    ${G.easy ? `<p class="modenote">Rahat modda rekor ve lig puanı yazılmaz.</p>` : recLine ? `<p class="rec">${recLine}</p>` : ""}${gain ? `<p>Haftalık lig: +${gain} puan</p>` : ""}
+    ${G.casual ? `<p class="modenote">Rekor ve lig puanı yalnızca Klasik modda yazılır.</p>` : recLine ? `<p class="rec">${recLine}</p>` : ""}${gain ? `<p>Haftalık lig: +${gain} puan</p>` : ""}
     <p class="earn">${COIN}+${tok} jeton · <span class="fl">${svgIcon(ICONS.flame)}</span>Seri ×${m.ws} · ${chestLine}</p>
     ${gifts.length ? `<h3>Hediyeler</h3><div class="gifts">${gifts.map((k, i) => `<div class="gift" style="animation-delay:${0.9 + i * 0.18}s">${icon(k)}<strong>+1</strong>${BOOSTERS[k].name}</div>`).join("")}</div>` : `<p>Bu yıldızların hediyelerini almıştın. Daha çok yıldız, daha çok hediye.</p>`}
     <button class="b3 xl green" id="o-next">Sonraki bölüm</button><div class="row2"><button class="b3 ghost" id="o-again">Tekrar</button><button class="b3 ghost" id="o-map">Harita</button></div>`, L.joker ? JOKER_THEME : THEMES[L.world]);

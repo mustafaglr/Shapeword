@@ -85,6 +85,29 @@
     return { ...shapeOf(path), bombIdx: kinds.indexOf("bomb"), gold: kinds.filter((k) => k === "gold").length, crystals: kinds.filter((k) => k === "crystal").length };
   }
 
+  // ---- the wordless mode: a tile is one of five colours ("1".."5") and a chain of 3-6 touching tiles of one colour is the "word" ----
+  const HUES = ["1", "2", "3", "4", "5"];
+  const hueTile = (rnd, rates) => { const t = randTile(rnd, rates); return t === "?" ? t : HUES[Math.floor(rnd() * HUES.length)] + t.slice(1); };
+  // a traced pattern is a chain when every tile has the same colour (jokers take any); returns it with the jokers filled in, or null
+  function resolveChain(pattern) {
+    const hue = [...pattern].find((ch) => ch !== "?") || HUES[0];
+    return pattern.length >= MIN_LEN && pattern.length <= MAX_LEN && [...pattern].every((ch) => ch === "?" || ch === hue) ? hue.repeat(pattern.length) : null;
+  }
+  // every chain on the grid as [chain, path], one per set of cells (the block only depends on the cells); capped, the grid is small
+  function findChains(grid) {
+    const out = [], seen = new Set(), used = new Array(M * M).fill(false), path = []; let budget = 30000;
+    function walk(i, hue) {
+      const ch = letterOf(grid[i]); if (used[i] || (ch !== "?" && hue && ch !== hue) || --budget < 0) return;
+      const h = hue || (ch === "?" ? "" : ch);
+      used[i] = true; path.push(i);
+      if (path.length >= MIN_LEN) { const key = path.slice().sort((a, b) => a - b).join(","); if (!seen.has(key) && out.length < 400) { seen.add(key); out.push([(h || HUES[0]).repeat(path.length), path.slice()]); } }
+      if (path.length < MAX_LEN) for (const j of neighbours(i, M)) walk(j, h);
+      used[i] = false; path.pop();
+    }
+    for (let i = 0; i < M * M; i++) walk(i, "");
+    return out;
+  }
+
   // Write `word` along a path of touching cells: cells in `allowed` take the needed letter, other cells must already show it.
   // Mutates g and returns the path, or null. Reusing letters already on the grid ties new letters to old ones.
   function plantWord(g, word, allowed, rnd) {
@@ -116,7 +139,7 @@
     return g;
   }
   const ensureFor = (left) => ["bomb", "crystal"].filter((k) => left[k] > 0);
-  function collapse(grid, removed, rnd, { rates = BASE_RATES, plantRate = 0, ensure = [] } = {}) {
+  function collapse(grid, removed, rnd, { rates = BASE_RATES, plantRate = 0, ensure = [], hues = false } = {}) {
     const gone = new Set(removed), moves = [], fresh = [];
     for (let c = 0; c < M; c++) {
       const col = [];
@@ -127,22 +150,24 @@
     for (let attempt = 0; attempt < 60; attempt++) {
       const g = new Array(M * M);
       for (const m of moves) g[m.to] = grid[m.from];
-      for (const f of fresh) g[f] = randTile(rnd, rates);
+      for (const f of fresh) g[f] = hues ? hueTile(rnd, rates) : randTile(rnd, rates);
+      if (hues) { if (findChains(g).length >= 3) return { grid: ensureTiles(g, ensure, fresh, rnd), moves, fresh }; continue; }
       if (wantPlant) for (const w of samplePlants(rnd)) if (plantWord(g, w, freshSet, rnd)) break;
       if (findWords(g).size >= MIN_WORDS) return { grid: ensureTiles(g, ensure, fresh, rnd), moves, fresh };
     }
-    const g = freshGrid(rnd, { rates, ensure });
+    const g = freshGrid(rnd, { rates, ensure, hues });
     return { grid: g, moves: [], fresh: [...g.keys()] };
   }
-  function freshGrid(rnd, { rates = BASE_RATES, ensure = [] } = {}) {
+  function freshGrid(rnd, { rates = BASE_RATES, ensure = [], hues = false } = {}) {
+    for (; hues; ) { const g = Array.from({ length: M * M }, () => hueTile(rnd, rates)); if (findChains(g).length >= 6) return ensureTiles(g, ensure, [...g.keys()], rnd); }
     for (;;) {
       const g = Array.from({ length: M * M }, () => randTile(rnd, rates)), all = new Set(g.keys());
       for (const w of samplePlants(rnd).slice(0, 2)) { const p = plantWord(g, w, all, rnd); if (p) p.forEach((i) => all.delete(i)); }
       if (findWords(g).size >= MIN_WORDS + 2) return ensureTiles(g, ensure, [...g.keys()], rnd);
     }
   }
-  function shuffleGrid(grid, rnd) { // "Karıştır": same tiles, new places
-    for (let t = 0; t < 40; t++) { const g = shuffle(grid.slice(), rnd); if (findWords(g).size >= MIN_WORDS) return g; }
+  function shuffleGrid(grid, rnd, hues = false) { // "Karıştır": same tiles, new places
+    for (let t = 0; t < 40; t++) { const g = shuffle(grid.slice(), rnd); if (hues ? findChains(g).length >= 3 : findWords(g).size >= MIN_WORDS) return g; }
     return grid.slice();
   }
   function rngFrom(str) {
@@ -333,7 +358,7 @@
   }
   const progressOf = (word, piece, res) => ({ ...wordProgress(word, piece), ...boardProgress(res) });
   // Hint/bot choice: the word and spot that move the open goals most, then clear the most
-  function bestMove(grid, board, open = {}) {
+  function bestMove(grid, board, open = {}, find = findWords) { // find: findWords, or findChains in the wordless mode
     // Filling a row, column or box that holds a wanted obstacle (or runs right beside one: the splash) sets up a clear, the way a person
     // would; the fuller that region already is, the more a cell in it is worth.
     const want = (v) => v && v.ob && (open[v.ob] || (v.ob === "jenerator" && open.cekirdek)), worth = new Array(B * B).fill(0);
@@ -344,7 +369,7 @@
       for (const i of reg) worth[i] += share;
     }
     let best = null;
-    for (const [word, path] of findWords(grid)) {
+    for (const [word, path] of find(grid)) {
       const piece = makePiece(grid, path);
       for (let r = 0; r <= B - piece.h; r++) for (let c = 0; c <= B - piece.w; c++) {
         if (!canPlace(board, piece, r, c)) continue;
@@ -362,6 +387,6 @@
   }
 
   const api = { M, B, BOX, MIN_LEN, MAX_LEN, BASE_RATES, WORLDS, BIOMES, OBST, REGIONS, worldOf, isWord, resolveWord, letterOf, kindOf, findWords, adjacent, shapeOf, makePiece,
-    plantWord, collapse, freshGrid, shuffleGrid, ensureFor, rngFrom, levelDef, botMoves, isJoker, starsFor, wordPoints, clearPoints, wordProgress, boardProgress, progressOf, emptyBoard, newOb, canPlace, fits, place, bestMove };
+    plantWord, resolveChain, findChains, collapse, freshGrid, shuffleGrid, ensureFor, rngFrom, levelDef, botMoves, isJoker, starsFor, wordPoints, clearPoints, wordProgress, boardProgress, progressOf, emptyBoard, newOb, canPlace, fits, place, bestMove };
   if (typeof module !== "undefined") module.exports = api; else root.Core = api;
 })(typeof window !== "undefined" ? window : globalThis);

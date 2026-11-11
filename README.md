@@ -13,7 +13,7 @@ Telefonda tarayıcıdan açıp "Ana Ekrana Ekle" dersen kendi simgesiyle tam ekr
 - **Yıldızlar:** hedeflerin hepsi ★★★, %70'i ★★, %40'ı ★.
 - **Sesler:** hepsi tarayıcıda üretilir. Kaydırdığın her harf dünyanın gamında bir nota çalar; her engelin kendi sesi, her dünyanın kendi ortam sesi var. Ayarlar'dan kapatılabilir.
 - **Rekabet:** haftalık lig, günlük düello (o gün oynamış gerçek bir oyuncu varsa rakip odur), bölüm rekorları, haritada diğer oyuncular.
-- **İki mod:** Rahat (varsayılan) o an yazılabilecek üç kelimeyi gösterir, dokununca harfleri parlar; rekor ve lig puanı yazılmaz. Klasik modda kelimeleri kendin bulursun. Mod, bölüm kartından ya da Ayarlar'dan seçilir.
+- **Üç mod:** Renk modunda kelime yok: aynı renkten en az 3 taşı birleştirirsin, çizdiğin yol blok olur. Rahat (varsayılan) o an yazılabilecek üç kelimeyi gösterir. Klasik modda kelimeleri kendin bulursun; rekor ve lig puanı yalnızca Klasik modda yazılır. Mod bölüm kartından seçilir.
 - **Günlük ödül:** 7 günlük seri.
 - **Jeton ve sandıklar:** 4 saatte bir bedava sandık, her 12 yıldızda yıldız sandığı, dünya, görev, kademe ve lig sandıkları. Jetonla +5 hamle ya da güçlendirici alınır.
 - **Günün görevleri:** her gün herkese aynı üç görev; üçü bitince görev sandığı.

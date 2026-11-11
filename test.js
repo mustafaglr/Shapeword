@@ -83,6 +83,22 @@ function play(n, seed, budget) {
   }
   return { stars: C.starsFor(L, left), used };
 }
+// ----- the wordless mode: colour chains -----
+assert.strictEqual(C.resolveChain("222"), "222"); assert.strictEqual(C.resolveChain("2?2?"), "2222"); assert.strictEqual(C.resolveChain("???"), "111");
+assert.strictEqual(C.resolveChain("22"), null); assert.strictEqual(C.resolveChain("223"), null); assert.strictEqual(C.resolveChain("2222222"), null);
+{ const r = C.rngFrom("hues"), isHue = (t) => t === "?" || /^[1-5][!*^]?$/.test(t);
+  for (let k = 0; k < 40; k++) {
+    let g = C.freshGrid(r, { hues: true, ensure: ["bomb", "crystal"] });
+    assert(g.length === 25 && g.every(isHue), "a colour grid holds only colours and jokers"); assert(g.some((t) => C.kindOf(t) === "bomb") && g.some((t) => C.kindOf(t) === "crystal"));
+    for (let turn = 0; turn < 6; turn++) {
+      const chains = C.findChains(g); assert(chains.length >= 3, "there is always a chain to make");
+      for (const [w, p] of chains) { assert(C.resolveChain(p.map((i) => C.letterOf(g[i])).join("")) === w && p.length === w.length && new Set(p).size === p.length); for (let j = 1; j < p.length; j++) assert(C.adjacent(p[j - 1], p[j])); }
+      const m = C.bestMove(g, C.emptyBoard(), {}, C.findChains); assert(m && m.path.length >= 3, "the hint finds a chain");
+      const res = C.collapse(g, chains[0][1], r, { hues: true }); assert(res.grid.every(isHue)); g = res.grid;
+    }
+    assert(C.shuffleGrid(g, r, true).every(isHue));
+  } }
+
 // ----- meta rules (meta.js): trophies, quests, chests, duel ghosts -----
 const Mt = require("./meta.js");
 assert.deepStrictEqual([0, 99, 100, 249, 250, 999, 1000, 5000].map(Mt.tierOf), [0, 0, 1, 1, 2, 4, 5, 5]);
