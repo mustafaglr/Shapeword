@@ -1,57 +1,100 @@
-// Self-check for core.js (Turkish): node test.js
+// Self-check for core.js (Turkish word list): node test.js
 const assert = require("assert");
 const C = require("./core.js");
-const rnd = C.rngFrom("test");
+const rnd = C.rngFrom("test"), B = C.B, at = (r, c) => r * B + c;
+const one = { ...C.shapeOf([0]), bombIdx: -1, gold: 0, crystals: 0 }; // a 1-cell block
+const row0 = (gap, ob) => { const b = C.emptyBoard(); for (let c = 0; c < 8; c++) b[c] = c === gap ? ob : { color: 0 }; return b; }; // row 0 full but for its last cell
+const count = (b, kind) => b.filter((v) => v && v.ob === kind).length;
 
-// words, tiles, adjacency
+// ----- words, tiles, adjacency -----
 for (const w of ["kedi", "kediye", "evde", "kuşlar", "güneş", "zürafa"]) assert(C.isWord(w), w);
 for (const w of ["xq", "abcdefg", "bals"]) assert(!C.isWord(w), w);
 assert.strictEqual(C.kindOf("a^"), "crystal"); assert.strictEqual(C.kindOf("?"), "joker"); assert.strictEqual(C.kindOf("b!"), "bomb");
 assert(C.adjacent(0, 6) && !C.adjacent(0, 2) && !C.adjacent(4, 5));
 assert.strictEqual(C.makePiece(["a^", "b", "c^", ...Array(22).fill("d")], [0, 1, 2]).crystals, 2);
-
-// collapse reports how tiles moved: every kept tile lands lower or equal in its column, fresh cells fill the rest
-const g0 = C.freshGrid(rnd), col = C.collapse(g0, [6, 7, 12], rnd, { plantRate: 1 });
+const g0 = C.freshGrid(rnd), col = C.collapse(g0, [6, 7, 12], rnd, { plantRate: 1 }); // tiles only ever fall down their own column
 assert.strictEqual(col.moves.length + col.fresh.length, 25);
 for (const m of col.moves) { assert.strictEqual(m.from % 5, m.to % 5); assert(m.to >= m.from); assert.strictEqual(col.grid[m.to], g0[m.from]); }
-assert.strictEqual(col.fresh.length, 3);
 
-// obstacles: a stone breaks with its row, ice takes two clears
-let b = C.emptyBoard(); for (let c = 0; c < 8; c++) b[c] = c === 3 ? { ob: "stone", hp: 1 } : { color: 0 };
-const one = { ...C.shapeOf([0]), bombIdx: -1 };
-let res = C.place(b, one, 0, 8, 1); assert.strictEqual(res.broken.length, 1); assert(res.board.slice(0, 9).every((x) => !x));
-b = C.emptyBoard(); for (let c = 0; c < 8; c++) b[c] = c === 3 ? { ob: "ice", hp: 2 } : { color: 0 };
-res = C.place(b, one, 0, 8, 1); assert.deepStrictEqual(res.cracked, [3]); assert.deepStrictEqual(res.board[3], { ob: "ice", hp: 1 });
+// ----- one rule per world -----
+let res = C.place(row0(3, C.newOb("kutuk")), one, 0, 8, 1); // Orman: a log breaks with its row
+assert.strictEqual(res.lines, 1); assert.deepStrictEqual(res.broken, [{ i: 3, ob: "kutuk" }]); assert(res.board.slice(0, 9).every((x) => !x));
 
-// levels: endless, deterministic, obstacles never start in a full region
-for (let n = 0; n < 200; n++) {
-  const L = C.levelDef(n), again = C.levelDef(n);
-  assert.deepStrictEqual(L, again);
-  assert(L.goals.length >= 1 && L.goals.every((g) => g.need > 0), `level ${n} goals`);
-  assert(!C.REGIONS.some((reg) => reg.every((i) => L.board[i])), `level ${n} starts with a full region`);
+let b = row0(-1); b[at(1, 4)] = C.newOb("kutuk"); // splash: next to a cleared row is enough
+assert(C.place(b, one, 0, 8, 1).broken.some((x) => x.i === at(1, 4)));
+
+res = C.place(row0(3, C.newOb("buz")), one, 0, 8, 1); // Buzul: ice cracks first, and the crack counts toward the goal
+assert.deepStrictEqual(res.cracked, [3]); assert.strictEqual(res.board[3].hp, 1); assert.strictEqual(C.progressOf("kedi", one, res).buz, 1);
+
+b = C.emptyBoard(); b[at(4, 4)] = C.newOb("lav"); // Volkan: lava spreads when none was put out...
+res = C.place(b, one, 0, 0, 1); assert.strictEqual(res.acts.filter((a) => a.type === "spread").length, 1); assert.strictEqual(count(res.board, "lav"), 2);
+b = row0(0, C.newOb("lav")); b[at(1, 4)] = C.newOb("lav"); b[at(5, 5)] = C.newOb("lav"); // ...holds still when one was put out; a clear next to lava does not put it out
+res = C.place(b, one, 0, 8, 1); assert.deepStrictEqual(res.broken, [{ i: 0, ob: "lav" }]); assert(!res.acts.some((a) => a.type === "spread")); assert(res.board[at(1, 4)]);
+
+b = C.emptyBoard(); b[at(4, 7)] = C.newOb("yengec", { dir: 1 }); // Okyanus: the crab walks, and turns at the wall
+res = C.place(b, one, 0, 0, 1); assert.strictEqual(res.board[at(4, 8)].ob, "yengec");
+res = C.place(res.board, one, 0, 2, 1); assert.strictEqual(res.board[at(4, 7)].dir, -1);
+
+res = C.place(row0(3, C.newOb("hayalet", { off: true })), one, 0, 8, 1); // Gece: a faded ghost takes no damage, then comes back
+assert.strictEqual(res.broken.length, 0); assert.deepStrictEqual(res.blocked, [3]); assert.strictEqual(res.board[3].off, false);
+
+b = C.emptyBoard(); b[at(4, 4)] = C.newOb("akrep", { t: 1 }); // Çöl: the scorpion stings when its count runs out, then starts over
+res = C.place(b, one, 0, 0, 1); assert.strictEqual(res.stings, 1); assert.strictEqual(res.board[at(4, 4)].t, C.OBST.akrep.timer);
+
+b = row0(-1); b[at(1, 4)] = C.newOb("dinamit"); b[at(2, 5)] = C.newOb("dinamit"); b[at(3, 6)] = { color: 0 }; b[at(3, 3)] = { color: 0 }; // Kanyon: blasts chain
+res = C.place(b, one, 0, 8, 1); assert.strictEqual(res.blasts.length, 2); assert(!res.board[at(3, 6)], "the chain reached it"); assert(res.board[at(3, 3)], "outside both blasts");
+
+b = row0(3, C.newOb("cekirdek")); b[at(8, 8)] = C.newOb("jenerator"); // Uzay: the core is shielded while a generator stands
+res = C.place(b, one, 0, 8, 1); assert.strictEqual(res.broken.length, 0); assert.deepStrictEqual(res.blocked, [3]);
+res = C.place(row0(3, C.newOb("cekirdek")), one, 0, 8, 1); assert.strictEqual(res.broken[0].ob, "cekirdek");
+b = row0(3, C.newOb("jenerator")); b[at(8, 8)] = C.newOb("cekirdek"); assert.strictEqual(C.place(b, one, 0, 8, 1).unshield, true);
+
+b = C.emptyBoard(); b[at(4, 4)] = C.newOb("bosluk"); b[at(4, 5)] = { color: 0 }; // Boşluk: swallows a block next to it
+res = C.place(b, one, 0, 0, 1); assert.deepStrictEqual(res.acts, [{ type: "eat", i: at(4, 4), j: at(4, 5) }]); assert(!res.board[at(4, 5)]);
+
+b = C.emptyBoard(); for (let r = 0; r < 9; r++) if (r !== 4) b[at(r, 8)] = { color: 0 }; b[at(4, 7)] = C.newOb("yengec", { dir: 1 }); // an obstacle's own move can complete a column
+res = C.place(b, one, 0, 0, 1); assert.strictEqual(res.lines, 1); assert(res.late.includes(at(4, 8))); assert(res.broken.some((x) => x.ob === "yengec"));
+
+// ----- levels: endless, repeatable, each world only its own obstacle, nothing starts full -----
+for (let n = 0; n < 300; n++) {
+  const L = C.levelDef(n), own = C.WORLDS[L.world].ob;
+  assert.deepStrictEqual(L, C.levelDef(n));
+  assert(L.goals.length >= 1 && L.goals.every((g) => g.need > 0), `level ${n + 1} goals`);
+  assert(!C.REGIONS.some((reg) => reg.every((i) => L.board[i])), `level ${n + 1} starts with a full region`);
+  for (const v of L.board) if (v) assert(v.ob === own || v.ob === C.OBST[own].shield, `level ${n + 1}: ${v.ob} outside its world`);
+  if (n % 10 === 0 && n) assert(L.goals.length === 1 && L.goals[0].type === own, `level ${n + 1} should introduce ${own}`);
 }
+assert(C.isJoker(6) && C.isJoker(13) && !C.isJoker(20) && C.levelDef(6).goals[0].type === "score");
+assert.strictEqual(C.starsFor({ goals: [{ type: "kutuk", need: 10 }] }, { kutuk: 3 }), 2);
 
-// calibration: a greedy bot plays levels 1-30 (2 letter seeds each) until goals are done or moves run out
-const sum = [0, 0, 0, 0];
-for (let n = 0; n < 30; n++) {
-  const L = C.levelDef(n);
-  for (let s = 0; s < 2; s++) {
-    const r = C.rngFrom(`bot${n}:${s}`);
-    let grid = C.freshGrid(r, { rates: L.rates }), board = L.board.slice(), used = 0, combo = 0;
-    const left = Object.fromEntries(L.goals.map((g) => [g.type, g.need]));
-    while (Object.values(left).some((v) => v > 0) && used < L.moves) {
-      const open = Object.fromEntries(Object.entries(left).filter(([, v]) => v > 0)), mv = C.bestMove(grid, board, open); if (!mv) break;
-      const piece = C.makePiece(grid, mv.path), res = C.place(board, piece, mv.r, mv.c, 0); used++;
-      combo = res.lines ? combo + 1 : 0;
-      const pr = { ...C.progressOf(mv.word, piece, res), score: C.wordPoints(mv.word, piece) + piece.cells.length + C.clearPoints(res, combo) };
-      for (const k in left) left[k] = Math.max(0, left[k] - (pr[k] || 0));
-      board = res.board; grid = C.collapse(grid, mv.path, r, { rates: L.rates, plantRate: L.plantRate }).grid;
-    }
-    sum[C.starsFor(L, left)]++;
+// ----- difficulty: a greedy bot plays; `budget` caps the words (scorpion stings cost one too) -----
+function play(n, seed, budget) {
+  const L = C.levelDef(n), r = C.rngFrom(seed), cap = budget || L.moves;
+  const left0 = Object.fromEntries(L.goals.map((g) => [g.type, g.need]));
+  let grid = C.freshGrid(r, { rates: L.rates, ensure: C.ensureFor(left0) }), board = L.board.slice(), used = 0, combo = 0;
+  const left = Object.fromEntries(L.goals.map((g) => [g.type, g.need]));
+  while (Object.values(left).some((v) => v > 0) && used < cap) {
+    const open = Object.fromEntries(Object.entries(left).filter(([, v]) => v > 0)), mv = C.bestMove(grid, board, open); if (!mv) { used = cap; break; }
+    const piece = C.makePiece(grid, mv.path), out = C.place(board, piece, mv.r, mv.c, 0); used += 1 + out.stings;
+    combo = out.lines ? combo + 1 : 0;
+    const pr = { ...C.progressOf(mv.word, piece, out), score: C.wordPoints(mv.word, piece) + piece.cells.length + C.clearPoints(out, combo) };
+    for (const k in left) left[k] = Math.max(0, left[k] - (pr[k] || 0));
+    board = out.board; grid = C.collapse(grid, mv.path, r, { rates: L.rates, plantRate: L.plantRate, ensure: C.ensureFor(left) }).grid;
   }
+  return { stars: C.starsFor(L, left), used };
 }
-console.log(`bot over 60 plays: 3 stars ${sum[3]}, 2 stars ${sum[2]}, 1 star ${sum[1]}, failed ${sum[0]}`);
-assert(sum[3] >= 36 && sum[0] <= 3, "difficulty out of range");
-assert(C.isJoker(6) && C.isJoker(13) && !C.isJoker(5) && C.levelDef(6).goals[0].type === "score");
-assert.strictEqual(C.starsFor({ goals: [{ type: "stone", need: 10 }] }, { stone: 3 }), 2);
-console.log("all core checks passed");
+if (process.argv.includes("--calibrate")) { // prints the MOVES table for core.js
+  const table = [];
+  for (let n = 0; n < 100; n++) {
+    if (C.isJoker(n)) { table.push(0); continue; }
+    const used = Array.from({ length: 8 }, (_, s) => play(n, `cal${n}:${s}`, 60).used).sort((a, b) => a - b);
+    table.push(Math.max(7, used[5]));
+  }
+  console.log("  const MOVES = [" + table.join(", ") + "];");
+} else {
+  const sum = [0, 0, 0, 0];
+  for (let w = 0; w < C.WORLDS.length; w++) for (const k of [0, 4, 8]) for (let s = 0; s < 2; s++) sum[play(w * 10 + k, `bot${w}:${k}:${s}`, C.botMoves(w * 10 + k)).stars]++; // against the bot's own budget; players get more (see levelDef)
+  console.log(`bot over ${sum.reduce((a, x) => a + x)} plays: 3 stars ${sum[3]}, 2 stars ${sum[2]}, 1 star ${sum[1]}, failed ${sum[0]}`);
+  assert(sum[3] >= 36 && sum[0] <= 3, "difficulty out of range: run `node test.js --calibrate` and paste the table into core.js");
+  console.log("all core checks passed");
+}

@@ -1,7 +1,12 @@
 # -*- coding: utf-8 -*-
-# Builds words-tr.js: hand-written everyday Turkish words (COMMON, used for grids and hints)
-# plus regular inflections (plural, locative, dative, accusative) that are also accepted (DICT).
-import re, json
+# Builds words-tr.js from three sources:
+#   1. the hand-written everyday words below (always in COMMON: used for grids, hints and the bot),
+#   2. an open lexicon for the dictionary forms: Zemberek-NLP master-dictionary.dict (Apache 2.0),
+#      github.com/ahmetaa/zemberek-nlp, morphology/src/main/resources/tr/
+#   3. word counts from subtitles, to rank the lexicon (frequent ones join COMMON) and to confirm inflected forms:
+#      FrequencyWords tr_full.txt (OpenSubtitles 2018, CC BY-SA 4.0), github.com/hermitdave/FrequencyWords, content/2018/tr/
+# usage: python3 -I build-words-tr.py master-dictionary.dict tr_full.txt     (the two downloads are not kept in the repo)
+import sys, json, random
 BASE = """
 ada ağa ağı ahu akı ala alt ama ana ant ara arı ark arz ası aşı aşk ata ayı aza bal bas baş bay bel ben bey bez bin bir bit boş boy boz buz cam can cep cin çam çan çay çek çit çok çöl çöp dağ dal dam dar dev dik dil diş diz dua dul düz ece ela fal far fen fil fiş gaz gel gem gen göl göz gök gül gün güz hak hal han hat hız hoş huy ırk ısı iki ilk kaç kan kap kar kas kaş kat kaz kel kep kil kin kir koç kol kor kot koy köy köz kul kum kur kuş kut kül küp laf lif lig maç mal mat mil mum nal nar naz nem not oba oda ora ova oya ölü pak pas pay pek pil pul raf ray rol ruh saç saf sağ sal sap sar sat saz sel sen ses sır sis siz son soy söz suç süt şah şal şan şef şey şiş şok şut tak tam tan tas taş tat tay tek tel ten ter tez tok ton top toz tuş tuz tüp tür tüy ulu üst üye var ver yağ yak yan yap yar yas yaş yat yay yaz yel yem yer yol yüz yük zar zil zor
 bak bil çal çık dur git gör kal kes koş oku öde sev sil sor tut uyu düş kır dön sus sür bul anla başla bekle dinle söyle oyna uyan yürü
@@ -54,12 +59,86 @@ def forms(w):
 accepted = set(base)
 for w in base + SHORT.split():
     accepted.update(f for f in forms(w) if 3 <= len(f) <= 6)
+
+# ---- the wide list ----
+ok = lambda w: len(w) > 1 and set(w) <= set(LETTERS)   # also drops proper names, punctuation and entries with spaces
+count = {}
+for line in open(sys.argv[2], encoding="utf-8"):
+    w, _, n = line.rstrip().partition(" ")
+    if n.isdigit() and ok(w): count[w] = int(n)
+words, stems, odd, inverse = set(), set(), set(), set()   # dictionary forms, verb stems, interjections and sound words, back-vowel words that take front suffixes (saat -> saati)
+for line in open(sys.argv[1], encoding="utf-8"):
+    w, _, attrs = line.strip().partition(" ")
+    w = w.translate(str.maketrans("âîû", "aiu"))
+    if not ok(w) or "Abbrv" in attrs: continue
+    if w[-3:] in ("mak", "mek") and "P:" not in attrs and len(w) > 4: stems.add(w[:-3])
+    if "Interj" in attrs or "P:Dup" in attrs: odd.add(w)
+    if "InverseHarmony" in attrs: inverse.add(w)
+    words.add(w)
+lemmas = {w for w in words if 3 <= len(w) <= 6}
+
+# Inflected forms: build stem + suffix freely, keep only what people really say (it is in the corpus often enough).
+V4, V2 = "ıiuü", "ae"
+def each(*parts):
+    out = [""]
+    for part in parts: out = [a + b for a in out for b in part]
+    return out
+NOUN_SUF = set(sum([
+    each("l", V2, "r"), each(V4), each(V2), each("ysn", V4), each("y", V2), each("dt", V2), each("dt", V2, "n"), each(["", "n"], V4, "n"), ["m", "n", "ki"],
+    each(V4, "m"), each(["", "y"], "l", V2), each("l", V4), each("s", V4, "z"), each("l", V4, "k"), each("cç", V4), each("cç", V2), each("mn", V4, "z"),
+    each("dt", V4), each("dt", V4, "r"), each("yd", V4), each(V4, "mn", V4), each(V4, "mn", V2), each("n", "dt", V2), each("l", V2, "r", V4), each("l", V2, "r", V2)], []))
+VERB_SUF = set(sum([
+    each("dt", V4), each("dt", V4, "mnk"), ["r"], each(V2 + V4, "r"), each("m", V2), each("m", V2, "zm"), each(["", "y"], V2, "n"), each(["", "y"], V4, "p"),
+    each("s", V2), each("s", V2, "mnk"), each(["", "y"], V4, "n"), each("s", V4, "n"), each(["", "y"], V2), each(V2, "l", "ıi", "m"), each("m", V4, "ş"),
+    each("m", V2, "k"), each(V2, "c", V2, "k"), each(V4, "yor"), each(V4, "nc", V2), each(V2, "r", V2, "k"), each("m", V2, "l", "ıi"), each(["", "y"], V4, "ş")], []))
+def variants(w):   # the stem as suffixes meet it: kitap -> kitab, renk -> reng, ağız -> ağz, hak -> hakk
+    out = {w}
+    soft = {"p": "b", "ç": "c", "t": "d", "k": "ğ"}.get(w[-1])
+    if soft: out.add(w[:-1] + soft)
+    if w.endswith("nk"): out.add(w[:-1] + "g")
+    if len(w) >= 4 and w[-2] in V4 and w[-1] not in VOWELS and w[-3] not in VOWELS: out.add(w[:-2] + w[-1])
+    if len(w) == 3: out.add(w + w[-1])
+    return out
+SAID = 30   # times in the corpus
+said = lambda c: 3 <= len(c) <= 6 and count.get(c, 0) >= SAID
+def fits(w, suf):   # vowel harmony, front or back: without it the corpus lets names and typos through (aldin, kima)
+    sv = next((ch for ch in suf if ch in VOWELS), None)
+    return sv is None or w in inverse or (sv in "eiü") == (last_vowel(w) in FRONT)
+TWO = set(SHORT.split()) | set("bu şu su ne kim ben sen biz siz".split())   # two-letter noun stems are only trusted from this list (yo + u is not a word)
+inflected = {w for w in stems if said(w)}   # the bare stem is the imperative: gel, bak, yap
+for group, sufs in ((words, NOUN_SUF), (stems, VERB_SUF)):
+    for w in group:
+        if len(w) < 3 and group is words and w not in TWO: continue
+        for v in variants(w):
+            inflected.update(c for c in (v + s for s in sufs if fits(w, s)) if said(c))
+for w in stems:   # de -> diyor, ye -> yiyor
+    if w[-1] in V2: inflected.update(c for c in (w[:-1] + v + "yor" for v in V4) if said(c))
+accepted |= lemmas | inflected
+
+# Everyday words: the hand-written ones plus the lexicon words heard most; these are planted in grids, hinted and used by the bot.
+BLOCK = set("sik siki sikik sikiş sikmek göt piç amcık yarak yarrak orospu kahpe kaltak ibne puşt döl bok boktan sıçmak pezevenk sürtük fahişe taşak kıç meme zenci kokain eroin esrar afyon penis vajina kondom anal seks seksi porno osuruk sperm tecavüz ırz nazi faşist kaka çiş sidik sürtük kancık şırfıntı yosma ırkçı köle idam intihar cinayet katil ceset kanser".split())
+EVERYDAY = 700  # times in the corpus
+common = sorted(set(base) | {w for w in lemmas if count.get(w, 0) >= EVERYDAY and w not in BLOCK and w not in odd})
+
 # Turkish letter frequencies (approx., per ~0.5%)
 FREQ = dict(a=24, e=18, i=17, n=15, r=14, l=12, ı=10, k=9, d=9, m=7, y=7, u=6, t=6, s=6, b=6, o=5, ü=4, ş=4, z=3, g=3, ç=3, h=2, ğ=2, v=2, c=2, ö=2, p=2, f=1)
 bag = "".join(ch * n for ch, n in FREQ.items())
-print(f"base {len(base)} words, accepted with inflections {len(accepted)}; samples: {sorted(forms('kedi') + forms('kitap') + forms('su'))}")
+rs = random.Random(1)
+ranked = sorted(common, key=lambda w: -count.get(w, 0))
+print(f"hand-written {len(base)}, lexicon words (3-6 letters) {len(lemmas)}, confirmed inflections {len(inflected - lemmas)}, accepted {len(accepted)}, everyday {len(common)}")
+print("everyday, least heard:", " ".join(ranked[-60:]))
+print("everyday, random:", " ".join(rs.sample(common, 60)))
+print("inflections, random:", " ".join(rs.sample(sorted(inflected - lemmas), 90)))
+import re
+print("check by eye:", " ".join(w for w in common if re.search("sik|göt|yar+ak|amc|seks|porn|osur|sıç|bok|piç|oros|döl|tecav|ırk|öldür|ölüm|kan$|silah|bomba|uyuştur|sarhoş|içki|bira|şarap|rakı|votka|viski|kumar", w)))
+for lo, hi in ((700, 1500), (300, 700)):
+    band = sorted(w for w in lemmas if lo <= count.get(w, 0) < hi and w not in BLOCK and w not in odd and w not in base)
+    print(f"heard {lo}-{hi} times: {len(band)} words, e.g.", " ".join(rs.sample(band, 45)))
+print("lexicon only, random:", " ".join(rs.sample(sorted(lemmas - set(common)), 60)))
+for w in "geldi evde kitabı ağzı rengi diyor bakar gider etti gelin olsa bana seni hakkı güzel kedi the you tsim".split(): print(w, w in accepted, end="; ")
+print()
 with open("words-tr.js", "w") as f:
-    f.write("// Turkish prototype word list: hand-written everyday words + regular inflections. Replace with a licensed full lexicon before launch.\n")
+    f.write("// Turkish word list, generated by build-words-tr.py: dictionary forms from the Zemberek-NLP lexicon (Apache 2.0) and inflected forms confirmed by\n// FrequencyWords counts (OpenSubtitles 2018, CC BY-SA 4.0). DICT_WORDS are accepted; COMMON_WORDS (everyday ones) fill the grids and the hints.\n")
     js = lambda x: json.dumps(x)  # ASCII-only (\\u escapes) so the file decodes the same whatever charset the server sends
-    f.write(f'var DICT_WORDS = {js(" ".join(sorted(accepted)))};\nvar COMMON_WORDS = {js(" ".join(base))};\nvar LETTER_BAG = {js(bag)};\nvar PLURAL_S = false;\nvar CATEGORIES = {js({k: v.split() for k, v in CATEGORIES.items()})};\n')
+    f.write(f'var DICT_WORDS = {js(" ".join(sorted(accepted)))};\nvar COMMON_WORDS = {js(" ".join(common))};\nvar LETTER_BAG = {js(bag)};\nvar PLURAL_S = false;\nvar CATEGORIES = {js({k: v.split() for k, v in CATEGORIES.items()})};\n')
     f.write('if (typeof module !== "undefined") module.exports = { DICT_WORDS, COMMON_WORDS, LETTER_BAG, PLURAL_S, CATEGORIES };\n')
