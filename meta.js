@@ -35,6 +35,7 @@
     return { tokens: lo + Math.floor(rnd() * (hi - lo + 1)), boosters: Array.from({ length: n }, () => BOOSTER_KEYS[Math.floor(rnd() * BOOSTER_KEYS.length)]) };
   }
   const STAR_STEP = 12, FREE_MS = 4 * 3600 * 1000; // a star chest every 12 stars; the free chest refills in four hours
+  const parTime = (moves) => moves * 12;           // Klasik: seconds inside which a full finish keeps its third star (12 s for every move the level gives)
   const STREAK = ["?", "*", "!"];                  // a win streak starts the next level with special letters: a joker, then also a gold one, then also a bomb
 
   // ---- duel ghosts: a recorded run is a list of [second, score]; anything else in a cloud record is dropped ----
@@ -43,7 +44,7 @@
   const QUICK = ["İyi oyunlar!", "Yakalayabilirsen yakala", "Rövanş?", "Güzel oyundu", "Bu sefer benim", "Şanslıydın"]; // the only messages players can send each other
   const quickIdx = (x) => (Number.isInteger(x) && x >= 0 && x < QUICK.length ? x : null);
 
-  const api = { TIERS, CUP, tierOf, cupsAfter, PAY, COST, QUESTS, questsFor, CHESTS, BOOSTER_KEYS, chestLoot, STAR_STEP, FREE_MS, STREAK, cleanRun, ghostAt, QUICK, quickIdx };
+  const api = { TIERS, CUP, tierOf, cupsAfter, PAY, COST, QUESTS, questsFor, CHESTS, BOOSTER_KEYS, chestLoot, STAR_STEP, FREE_MS, parTime, STREAK, cleanRun, ghostAt, QUICK, quickIdx };
   if (typeof module !== "undefined") module.exports = api;
   root.Meta = api;
 })(typeof window !== "undefined" ? window : globalThis);

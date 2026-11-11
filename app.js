@@ -143,6 +143,7 @@ function mergeProfiles(a, b) { // same player on two devices: best result per le
   const out = { ...a, stars: { ...a.stars }, best: { ...a.best } };
   for (const [k, v] of Object.entries(b.stars || {})) out.stars[k] = Math.max(out.stars[k] || 0, v);
   for (const [k, v] of Object.entries(b.best || {})) out.best[k] = Math.max(out.best[k] || 0, v);
+  out.time = { ...(a.time || {}) }; for (const [k, v] of Object.entries(b.time || {})) out.time[k] = Math.min(out.time[k] || Infinity, v);
   out.duelBest = Math.max(a.duelBest || 0, b.duelBest || 0);
   out.inv = (b.updated || 0) > (a.updated || 0) ? { ...b.inv } : { ...a.inv };
   out.week = newer(a.week, b.week, "id", "pts"); out.duel = newer(a.duel, b.duel, "date", "score"); out.streak = newer(a.streak, b.streak, "last", "n"); out.face = newer(a.face, b.face, "t", "t"); out.prevWeek = newer(a.prevWeek, b.prevWeek, "id", "pts");
@@ -580,15 +581,24 @@ function intro(n) {
   card(`<div class="lvlhead">${L.joker ? `<span class="badge">Joker bölümü</span>` : newWorld ? `<span class="badge plain">Yeni dünya · yeni engel</span>` : ""}<h2>Bölüm ${n + 1}</h2><p>${L.joker ? "Bol joker ve altın harf, ekstra hediye" : `${L.biome} dünyası`} · ${L.moves} hamle</p></div>
     ${n % 10 === 0 ? goalRows(L, null, true) + demoHTML(L.goals[0].type) : goalRows(L)}
     <div class="stars">${[1, 2, 3].map((k) => star(k <= (profile.stars[n] || 0), 34)).join("")}</div>
-    <p class="rec">${rec ? (rec.me ? `Rekor sende: ${rec.score} puan` : `Rekor: ${esc(rec.name)} · ${rec.score} puan`) : "Bu bölümde henüz rekor yok"}</p>
+    <button class="reclink" id="i-top" aria-label="Bu bölümün ilk 10'u">${CUP}${rec ? (rec.me ? `Rekor sende: ${rec.score} puan` : `Rekor: ${esc(rec.name)} · ${rec.score} puan`) : "Bu bölümde henüz rekor yok"} ›</button>
     ${ws ? `<p class="wsline">${svgIcon(ICONS.flame)}Galibiyet serisi ×${ws}: ${["joker", "joker ve altın harf", "joker, altın ve bomba harfi"][ws - 1]} ile başlıyorsun</p>` : "<p>Hepsini bitir ★★★ · %70 ★★ · %40 ★</p>"}
     <div class="tabs" id="i-mode" role="tablist" aria-label="Oyun modu">${[["renk", "Renk"], ["rahat", "Rahat"], ["klasik", "Klasik"]].map(([k, t]) => `<button role="tab" data-m="${k}" aria-selected="${prefs.mode === k}">${t}</button>`).join("")}</div>
     <p class="modenote" id="i-note"></p>
     <button class="b3 xl green" id="i-go">Başla</button><button class="b3 ghost" id="i-back">Vazgeç</button>`, theme);
-  const note = () => ($("i-note").textContent = { renk: "Renk: kelime yok. Aynı renkten en az 3 taşı birleştir, çizdiğin yol blok olsun. Rekor ve lig puanı yazılmaz.", rahat: "Rahat: yazabileceğin kelimeler gösterilir; dokununca harfleri parlar. Rekor ve lig puanı yazılmaz.", klasik: "Klasik: kelimeleri kendin bulursun. Rekor ve lig puanı yazılır." }[prefs.mode]);
+  const note = () => ($("i-note").textContent = { renk: "Renk: kelime yok. Aynı renkten en az 3 taşı birleştir, çizdiğin yol blok olsun. Rekor ve lig puanı yazılmaz.", rahat: "Rahat: yazabileceğin kelimeler gösterilir; dokununca harfleri parlar. Rekor ve lig puanı yazılmaz.", klasik: `Klasik: kelimeleri kendin bulursun. ${L.joker ? "" : `Üçüncü yıldız için ${mmss(Meta.parTime(L.moves))} içinde bitir. `}Rekor ve lig puanı yazılır.` }[prefs.mode]);
   $("i-mode").querySelectorAll("button").forEach((b) => (b.onclick = () => { prefs.mode = b.dataset.m; store.set("sw4:prefs", prefs); $("i-mode").querySelectorAll("button").forEach((x) => x.setAttribute("aria-selected", x === b)); note(); snd.play("toggle"); }));
-  note();
+  note(); $("i-top").onclick = () => levelTop(n);
   $("i-go").onclick = () => startLevel(n); $("i-back").onclick = closeCard; playDemo();
+}
+const mmss = (s) => `${Math.floor(s / 60)}:${pad(Math.floor(s) % 60)}`;
+function levelTop(n) { // a level's first ten: stars, then the time of a full Klasik finish, then the score
+  const time = (p) => { const v = +(p.time || {})[n]; return Number.isFinite(v) && v > 0 ? v : Infinity; }, stars = (p) => Math.min(3, Math.max(0, Math.floor(+(p.stars || {})[n] || 0))), score = (p) => +(p.best || {})[n] || 0;
+  const rows = [...others(), ...(isAdmin() ? [] : [profile])].filter((p) => stars(p) > 0).sort((x, y) => stars(y) - stars(x) || time(x) - time(y) || score(y) - score(x)).slice(0, 10);
+  card(`<h2>Bölüm ${n + 1} · ilk 10</h2><p>Önce yıldız, sonra Klasik modda bitirme süresi, sonra puan.</p>
+    <div class="lb top">${rows.map((p, i) => `<div class="${p.id === profile.id ? "me" : ""}"><span>${i < 3 ? CUP : i + 1}</span><span class="who">${avatar(p)}<span>${esc(p.name)}</span></span><small>${time(p) < Infinity ? mmss(time(p)) : "–"}</small><strong>${"★".repeat(stars(p))}</strong></div>`).join("") || "<p>Bu bölümü henüz geçen yok. İlk sen ol.</p>"}</div>
+    <button class="b3 ghost" id="t-back">Geri</button>`);
+  $("t-back").onclick = () => intro(n);
 }
 function helpCard(L) {
   if (G && !$("app").hidden) busy = true;
@@ -616,7 +626,7 @@ function baseState(L, rnd, mode, hues = false) { // hues: the wordless mode, col
 }
 function startLevel(n) {
   abandon();
-  G = baseState(Core.levelDef(n), Math.random, "level", prefs.mode === "renk"); G.rec = recordOf(n); G.easy = prefs.mode === "rahat"; G.casual = prefs.mode !== "klasik";
+  G = baseState(Core.levelDef(n), Math.random, "level", prefs.mode === "renk"); G.rec = recordOf(n); G.easy = prefs.mode === "rahat"; G.casual = prefs.mode !== "klasik"; G.timed = !G.casual && !G.L.joker; G.clock = 0; // Klasik levels are timed: the clock never ends a level, it decides the third star and the level ranking
   if (!G.L.joker) streakTiles(G.grid, Math.min(Meta.STREAK.length, meta().ws || 0));
   openScreen();
 }
@@ -660,6 +670,7 @@ function makeRival() {
 let lastTick = performance.now();
 setInterval(() => {
   const t = performance.now(), dt = (t - lastTick) / 1000; lastTick = t;
+  if (G && G.timed && !G.ended && !busy && !$("app").hidden) { const was = Math.floor(G.clock); G.clock += dt; if (Math.floor(G.clock) !== was) renderTop(); } // stands still while a card or an animation holds the game
   if (!G || !G.running || busy) return;
   G.elapsed = (G.elapsed || 0) + dt; G.timeLeft = Math.max(0, G.timeLeft - dt); renderTop(); renderGoals();
   const s = Math.ceil(G.timeLeft); if (s < G.tickAt && s > 0) { G.tickAt = s; snd.play("duelTick", s); }
@@ -791,7 +802,8 @@ function renderGoals() {
 function renderTop() {
   if (G.mode === "duel") { const s = Math.ceil(G.timeLeft); $("moves-n").textContent = `${Math.floor(s / 60)}:${pad(s % 60)}`; $("moves-l").textContent = "süre"; $("moves").classList.toggle("low", G.timeLeft <= 15); }
   else { $("moves-n").textContent = G.moves; $("moves-l").textContent = "hamle"; $("moves").classList.toggle("low", G.moves <= 3); }
-  $("t-sub").textContent = G.rec && !G.rec.me && !G.passed ? `${G.score} / ${G.rec.score} puan` : `${G.score} puan`;
+  $("t-sub").textContent = (G.rec && !G.rec.me && !G.passed ? `${G.score} / ${G.rec.score} puan` : `${G.score} puan`) + (G.timed ? ` · ${mmss(G.clock)}` : "");
+  $("t-sub").classList.toggle("late", !!G.timed && G.clock > Meta.parTime(G.L.moves));
 }
 function renderBoosters() {
   $("boosters").innerHTML = Object.keys(BOOSTERS).map((k) => { const n = isAdmin() ? "∞" : inv()[k];
@@ -1099,6 +1111,9 @@ function noRoom() {
 const GIFTS_PER_STAR = { 1: ["karistir"], 2: ["ipucu"], 3: ["yenile", "joker"] };
 function levelEnd(stars, finishedAll) {
   busy = true;
+  const par = Meta.parTime(G.L.moves), took = Math.round(G.clock || 0), late = !!G.timed && finishedAll && took > par;
+  if (late) stars = 2; // Klasik: the third star is for a full finish inside the time; the level is passed either way
+  if (G.timed && finishedAll) { profile.time ||= {}; profile.time[G.L.n] = Math.min(profile.time[G.L.n] || Infinity, took); }
   const L = G.L, bonus = finishedAll ? G.moves * 20 : 0, final = G.score + bonus, prev = profile.stars[L.n] || 0, prevBest = profile.best[L.n] || 0, rec = recordOf(L.n);
   const gifts = []; for (let s = prev + 1; s <= stars; s++) gifts.push(...GIFTS_PER_STAR[s]); // only newly earned stars pay out
   if (L.joker && !prev) gifts.push(...["karistir", "yenile", "ipucu", "joker"].sort(() => Math.random() - 0.5).slice(0, 2)); // joker levels give two extra gifts the first time
@@ -1113,6 +1128,7 @@ function levelEnd(stars, finishedAll) {
   card(`<div class="lvlhead"><div class="stars">${[1, 2, 3].map((s, i) => star(s <= stars).replace("<svg", `<svg style="animation-delay:${0.2 + i * 0.25}s"`)).join("")}</div>
     <h2>Bölüm ${L.n + 1} ${stars === 3 ? "tamam!" : "geçildi"}</h2></div><div class="big" id="o-score">${G.score}</div>
     <p>${finishedAll ? (G.moves ? `Kalan ${G.moves} hamle × 20 = +${bonus}` : "Son hamlede bitirdin.") : `Hedeflerin bir kısmı kaldı. Tekrar oynayıp ${stars + 1}. yıldızı alabilirsin.`}</p>
+    ${G.timed && finishedAll ? `<p class="${late ? "modenote" : "rec"}">Süre ${mmss(took)} · ${late ? `3. yıldız için ${mmss(par)} içinde bitir` : `süre sınırı ${mmss(par)} içinde`}</p>` : ""}
     ${G.casual ? `<p class="modenote">Rekor ve lig puanı yalnızca Klasik modda yazılır.</p>` : recLine ? `<p class="rec">${recLine}</p>` : ""}${gain ? `<p>Haftalık lig: +${gain} puan</p>` : ""}
     <p class="earn">${COIN}+${tok} jeton · <span class="fl">${svgIcon(ICONS.flame)}</span>Seri ×${m.ws} · ${chestLine}</p>
     ${gifts.length ? `<h3>Hediyeler</h3><div class="gifts">${gifts.map((k, i) => `<div class="gift" style="animation-delay:${0.9 + i * 0.18}s">${icon(k)}<strong>+1</strong>${BOOSTERS[k].name}</div>`).join("")}</div>` : `<p>Bu yıldızların hediyelerini almıştın. Daha çok yıldız, daha çok hediye.</p>`}

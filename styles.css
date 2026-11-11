@@ -336,3 +336,10 @@ button.pill { cursor: pointer; } .pill svg { width: 18px; height: 18px; } .pill 
 .tile.hue.gold { box-shadow: 0 0 0 3px #FFE08A, 0 0 12px 2px rgba(255,201,60,.9), 0 3px 0 rgba(0,0,0,.28); }
 .tile.hue.gold::before { content: "×2"; position: absolute; top: -5px; left: -3px; padding: 0 5px; border-radius: 999px; background: #FFC93C; color: #3A2600; font: 700 .62rem/1.5 var(--ui); text-shadow: none; }
 .tile.hue.crystal { box-shadow: 0 0 0 3px #E9D5FF, 0 3px 0 rgba(0,0,0,.28); }
+/* Klasik: the level clock, and a level's first ten */
+#t-sub.late { color: #FFC9C7; }
+.reclink { align-self: center; display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 999px; padding: 7px 14px; cursor: pointer; background: var(--well); color: var(--ink); font: 700 .86rem var(--ui); }
+.reclink svg { width: 18px; height: 18px; }
+.lb.top div > span:first-child svg { width: 22px; height: 22px; display: block; }
+.lb.top div:nth-child(2) > span:first-child svg { filter: grayscale(1) brightness(1.15); } .lb.top div:nth-child(3) > span:first-child svg { filter: sepia(.9) saturate(1.6) hue-rotate(-28deg) brightness(.8); }
+.lb.top strong { color: #D99400; letter-spacing: 1px; }

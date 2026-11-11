@@ -113,6 +113,7 @@ for (const kind in Mt.CHESTS) {
   for (let i = 0; i < 400; i++) { const l = Mt.chestLoot(kind, r); minT = Math.min(minT, l.tokens); maxT = Math.max(maxT, l.tokens); minB = Math.min(minB, l.boosters.length); maxB = Math.max(maxB, l.boosters.length); assert(l.boosters.every((k) => Mt.BOOSTER_KEYS.includes(k))); }
   assert(minT >= lo && maxT <= hi && maxT > minT, kind + " chest tokens"); assert(minB === Math.floor(nb) && maxB === Math.ceil(nb), kind + " chest boosters");
 }
+assert.strictEqual(Mt.parTime(12), 144);
 { const run = Mt.cleanRun([[5, 40], [1, 10], "x", [9, -3], [20, 90], [3]]);
   assert.deepStrictEqual(run, [[1, 10], [5, 40], [20, 90]]); assert.deepStrictEqual([0, 1, 4, 5, 19, 20, 500].map((t) => Mt.ghostAt(run, t)), [0, 10, 10, 40, 40, 90, 90]);
   assert.deepStrictEqual(Mt.cleanRun("nope"), []); assert.strictEqual(Mt.quickIdx(2), 2); assert.strictEqual(Mt.quickIdx(99), null); assert.strictEqual(Mt.quickIdx("1"), null); }
