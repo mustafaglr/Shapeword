@@ -62,18 +62,18 @@ main { position: relative; z-index: 1; max-width: 430px; margin: 0 auto; display
 .wordline { position: relative; min-height: 28px; display: flex; align-items: center; justify-content: center; font: 700 1.25rem var(--display); letter-spacing: .1em; text-transform: uppercase; text-align: center; color: #fff; text-shadow: 0 2px 3px rgba(0,0,0,.3); }
 .wordline.ok { color: #FFF4B8; text-shadow: 0 0 12px rgba(255,244,184,.8), 0 2px 3px rgba(0,0,0,.35); } .wordline.no { color: rgba(255,255,255,.6); }
 .wordline.msg { font: 600 .85rem var(--ui); letter-spacing: 0; text-transform: none; color: rgba(255,255,255,.92); }
-.gridwrap { position: relative; width: min(92%, 31vh); width: min(92%, 31dvh); aspect-ratio: 1; margin: 2px auto 0; touch-action: none; }
+.gridwrap { position: relative; width: 100%; aspect-ratio: 1; max-height: 31vh; max-height: 31dvh; margin: 2px auto 0; touch-action: none; }
 .trace { position: absolute; inset: 0; pointer-events: none; overflow: visible; z-index: 2; }
-.tile { position: absolute; left: 0; top: 0; border-radius: 50%; display: grid; place-items: center; z-index: 1; will-change: transform;
+.tile { position: absolute; left: 0; top: 0; border-radius: 999px; display: grid; place-items: center; z-index: 1; will-change: transform;
   background: radial-gradient(circle at 35% 28%, #FFFFFF 0 16%, #EEF0FA 42%, #C6CCE4 100%); color: #262150;
   box-shadow: 0 3px 0 rgba(0,0,0,.28), inset 0 -3px 6px rgba(0,0,0,.12); font-family: var(--display); font-weight: 600; text-transform: uppercase; }
 .tile span { transition: transform .12s; }
 .tile.gold { background: radial-gradient(circle at 35% 28%, #FFF6D0 0 14%, #FFC93C 48%, #D99400 100%); color: #3A2A00; }
 .tile.bomb { background: radial-gradient(circle at 35% 28%, #6B5A8C 0 12%, #2B2240 55%, #120D1E 100%); color: #fff; box-shadow: 0 0 0 2px #FF5A4F, 0 3px 0 rgba(0,0,0,.3); }
-.tile.bomb::after { content: ""; position: absolute; top: 4%; right: 10%; width: 14%; height: 14%; border-radius: 50%; background: #FF5A4F; box-shadow: 0 0 8px #FF5A4F; animation: fuse .6s ease-in-out infinite alternate; }
+.tile.bomb::after { content: ""; position: absolute; top: 6%; right: 8%; height: 16%; aspect-ratio: 1; border-radius: 50%; background: #FF5A4F; box-shadow: 0 0 8px #FF5A4F; animation: fuse .6s ease-in-out infinite alternate; }
 @keyframes fuse { to { opacity: .35; } }
 .tile.crystal { background: radial-gradient(circle at 35% 28%, #F3E8FF 0 14%, #B57BFF 50%, #6D28D9 100%); color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
-.tile.crystal::after { content: ""; position: absolute; inset: -3px; border-radius: 50%; box-shadow: 0 0 10px 2px rgba(181,123,255,.8); animation: glow 1.4s ease-in-out infinite alternate; }
+.tile.crystal::after { content: ""; position: absolute; inset: -3px; border-radius: inherit; box-shadow: 0 0 10px 2px rgba(181,123,255,.8); animation: glow 1.4s ease-in-out infinite alternate; }
 @keyframes glow { from { opacity: .3; } }
 .tile.joker { background: conic-gradient(from 30deg, #F25F5C, #FFB627, #2EC4B6, #4D7CFE, #9B5DE5, #F25F5C); color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.4); }
 .tile.sel { box-shadow: 0 0 0 3px #fff, 0 0 18px rgba(255,255,255,.95); }
@@ -275,7 +275,7 @@ main { position: relative; z-index: 1; max-width: 430px; margin: 0 auto; display
 .admin h3 { margin: 0; color: #B8801A; }
 .card .field-in { background: var(--well); }
 .share { width: 100%; box-sizing: border-box; font: .85rem ui-monospace, Menlo, monospace; color: var(--ink); background: var(--well); border: 0; border-radius: 12px; padding: 10px; resize: none; }
-@media (max-height: 780px) { .gridwrap { width: min(92%, 27vh); width: min(92%, 27dvh); } .board { width: min(100%, 35vh); width: min(100%, 35dvh); } }
+@media (max-height: 780px) { .gridwrap { max-height: 30vh; max-height: 30dvh; } .board { width: min(100%, 32vh); width: min(100%, 32dvh); } }
 @media (max-height: 700px) { body { padding-block: 4px 6px; } main { gap: 5px; } .field { padding: 6px 10px 8px; } .wordline { min-height: 24px; font-size: 1.05rem; } .booster { padding: 4px 4px 3px; } .hud { padding: 4px; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 /* tokens, tiers, chests, quests, challenges */

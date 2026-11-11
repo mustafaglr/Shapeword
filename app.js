@@ -673,21 +673,21 @@ function addScore(p) { // every point also counts down a joker level's score goa
 }
 
 // ===================== letter field =====================
-function geo() { const w = $("gridwrap").clientWidth, gap = Math.max(6, w * 0.03), size = (w - gap * (M - 1)) / M; return { w, gap, size, pitch: size + gap }; }
-const pos = (i, g) => [(i % M) * g.pitch, ((i / M) | 0) * g.pitch];
+function geo() { const el = $("gridwrap"), w = el.clientWidth, h = el.clientHeight, gap = Math.max(6, h * 0.03), size = (h - gap * (M - 1)) / M, sx = (w - gap * (M - 1)) / M; return { w, h, gap, size, sx, pitch: size + gap, px: sx + gap }; }
+const pos = (i, g) => [(i % M) * g.px, ((i / M) | 0) * g.pitch];
 function setTile(el, t) { el.className = "tile " + Core.kindOf(t); el.firstChild.textContent = Core.letterOf(t); }
 function newTile(t, g) {
   const el = document.createElement("div"); el.appendChild(document.createElement("span")); setTile(el, t);
-  el.style.width = el.style.height = g.size + "px"; el.style.fontSize = g.size * 0.46 + "px"; $("gridwrap").appendChild(el); return { el };
+  el.style.width = g.sx + "px"; el.style.height = g.size + "px"; el.style.fontSize = g.size * 0.52 + "px"; $("gridwrap").appendChild(el); return { el };
 }
 function placeTile(tl, i, g) { const [x, y] = pos(i, g); tl.el.style.transform = `translate(${x}px,${y}px)`; return [x, y]; }
-function layoutTiles() { if (!tiles.length || $("app").hidden) return; const g = geo(); tiles.forEach((tl, i) => { if (!tl) return; tl.el.style.width = tl.el.style.height = g.size + "px"; tl.el.style.fontSize = g.size * 0.46 + "px"; placeTile(tl, i, g); }); }
+function layoutTiles() { if (!tiles.length || $("app").hidden) return; const g = geo(); tiles.forEach((tl, i) => { if (!tl) return; tl.el.style.width = g.sx + "px"; tl.el.style.height = g.size + "px"; tl.el.style.fontSize = g.size * 0.52 + "px"; placeTile(tl, i, g); }); }
 function buildTiles(rain) { // a fresh grid rains in from above, row by row
   tiles.forEach((tl) => tl && tl.el.remove());
   const g = geo();
   tiles = G.grid.map((t, i) => {
     const tl = newTile(t, g), [x, y] = placeTile(tl, i, g);
-    if (rain) anim(tl.el, [{ transform: `translate(${x}px,${y - g.w - 40}px)` }, { transform: `translate(${x}px,${y}px)` }], { duration: 520, delay: (M - 1 - ((i / M) | 0)) * 70 + (i % M) * 30, easing: "cubic-bezier(.3,1.3,.6,1)", fill: "backwards" });
+    if (rain) anim(tl.el, [{ transform: `translate(${x}px,${y - g.h - 40}px)` }, { transform: `translate(${x}px,${y}px)` }], { duration: 520, delay: (M - 1 - ((i / M) | 0)) * 70 + (i % M) * 30, easing: "cubic-bezier(.3,1.3,.6,1)", fill: "backwards" });
     return tl;
   });
 }
@@ -725,7 +725,7 @@ function animateWord(usedPath, res, slotIdx) {
 function drawTrace() {
   const svg = $("trace");
   if (path.length < 2) { svg.innerHTML = ""; return; }
-  const g = geo(), pts = path.map((i) => { const [x, y] = pos(i, g); return `${x + g.size / 2},${y + g.size / 2}`; }).join(" ");
+  const g = geo(), pts = path.map((i) => { const [x, y] = pos(i, g); return `${x + g.sx / 2},${y + g.size / 2}`; }).join(" ");
   svg.innerHTML = `<polyline points="${pts}" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="${g.size * 0.42}" stroke-linecap="round" stroke-linejoin="round"/><polyline points="${pts}" fill="none" stroke="#fff" stroke-width="${g.size * 0.14}" stroke-linecap="round" stroke-linejoin="round"/>`;
 }
 function markPath() { tiles.forEach((tl, i) => tl && tl.el.classList.toggle("sel", path.includes(i))); drawTrace(); }
@@ -824,9 +824,9 @@ function credit(type, n, from) {
 // ===================== swiping words =====================
 function tileAt(x, y) {
   const r = $("gridwrap").getBoundingClientRect(), g = geo();
-  const c = Math.floor((x - r.left) / g.pitch), row = Math.floor((y - r.top) / g.pitch);
+  const c = Math.floor((x - r.left) / g.px), row = Math.floor((y - r.top) / g.pitch);
   if (c < 0 || c >= M || row < 0 || row >= M) return null;
-  return Math.hypot(x - (r.left + c * g.pitch + g.size / 2), y - (r.top + row * g.pitch + g.size / 2)) < g.size * 0.48 ? row * M + c : null; // round hit zone so diagonal swipes slip between neighbours
+  return Math.hypot((x - (r.left + c * g.px + g.sx / 2)) / g.sx, (y - (r.top + row * g.pitch + g.size / 2)) / g.size) < 0.48 ? row * M + c : null; // oval hit zone so diagonal swipes slip between neighbours
 }
 const pattern = () => path.map((i) => Core.letterOf(G.grid[i])).join("");
 function showPath() { const p = pattern(), w = p.length >= 3 ? Core.resolveWord(p) : null; say(p ? up(w || p) : "Harfleri kaydırıp kelime yaz", !p ? "msg" : w ? "ok" : "no"); markPath(); }
