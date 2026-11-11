@@ -98,10 +98,12 @@ assert.strictEqual(C.resolveChain("22"), null); assert.strictEqual(C.resolveChai
     }
     assert(C.shuffleGrid(g, r, true).every(isHue));
   }
-  C.setSize(6); // the wordless mode's bigger field
-  let g = C.freshGrid(r, { hues: true }); assert(g.length === 36 && C.M === 6);
-  for (let turn = 0; turn < 8; turn++) { const chains = C.findChains(g); assert(chains.length >= 3); for (const [, p] of chains) { assert(p.every((i) => i >= 0 && i < 36)); for (let j = 1; j < p.length; j++) assert(C.adjacent(p[j - 1], p[j])); }
-    const pc = C.makePiece(g, chains[0][1]); assert(pc.w <= 6 && pc.h <= 6); const res = C.collapse(g, chains[0][1], r, { hues: true }); assert(res.grid.length === 36 && res.grid.every(isHue)); g = res.grid; }
+  C.setSize(9, 6); // the wordless mode's wider field
+  let g = C.freshGrid(r, { hues: true }); assert(g.length === 54 && C.M === 9 && C.H === 6);
+  assert(C.adjacent(8, 17) && !C.adjacent(8, 9) && C.adjacent(45, 46) && !C.adjacent(53, 54), "rows do not wrap, and there is no row below the last");
+  for (let turn = 0; turn < 8; turn++) { const chains = C.findChains(g); assert(chains.length >= 3); for (const [, p] of chains) { assert(p.every((i) => i >= 0 && i < 54)); for (let j = 1; j < p.length; j++) assert(C.adjacent(p[j - 1], p[j])); }
+    const pc = C.makePiece(g, chains[0][1]); assert(pc.w <= 6 && pc.h <= 6); const res = C.collapse(g, chains[0][1], r, { hues: true }); assert(res.grid.length === 54 && res.grid.every(isHue)); g = res.grid; }
+  { const col = [0, 9, 18].map((i) => g[i]), res = C.collapse(g, [27, 36, 45], r, { hues: true }); assert.deepStrictEqual([27, 36, 45].map((i) => res.grid[i]), col, "tiles above a cleared chain fall to the bottom of their column"); }
   C.setSize(5); assert(C.freshGrid(r, {}).length === 25); }
 
 // ----- meta rules (meta.js): trophies, quests, chests, duel ghosts -----

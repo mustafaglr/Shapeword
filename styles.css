@@ -350,3 +350,4 @@ body.cb .tile.h1 { --h: #D55E00; --hd: #8F3F00; color: #fff; } body.cb .tile.h2 
 body.cb .tile.h4 { --h: #0072B2; --hd: #004B75; color: #fff; } body.cb .tile.h5 { --h: #CC79A7; --hd: #8F4F73; color: #14112B; }
 body.cb .tile.hue span { font-size: 1.6em; }
 body.cb .tile.hue.gold { box-shadow: 0 0 0 3px #14112B, 0 0 0 6px #FFE08A; } body.cb .tile.hue.crystal { box-shadow: 0 0 0 3px #fff, 0 0 0 6px #6D28D9; } body.cb .tile.hue.bomb { box-shadow: 0 0 0 3px #fff, 0 0 0 6px #D00000; }
+#gridwrap.sq .tile { border-radius: 9px; } /* Renk mod: small square tiles, nine across */

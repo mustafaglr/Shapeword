@@ -2,7 +2,7 @@
 // The rules are in core.js, the drawings in scenes.js, the sounds in sounds.js.
 document.documentElement.lang = "tr"; // Turkish casing: i -> İ, ı -> I
 const { B, MAX_LEN } = Core;
-let M = Core.M; // side of the letter field: 5 for words, 6 for colour chains (baseState sets it)
+let M = Core.M, R = Core.H; // columns and rows of the letter field: 5×5 for words, 9×6 for colour chains (baseState sets them)
 const $ = (id) => document.getElementById(id);
 const up = (w) => w.toLocaleUpperCase("tr");
 const RM = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -622,7 +622,7 @@ $("help").onclick = () => G && helpCard(G.mode === "level" ? G.L : null);
 
 // ===================== starting a level or the duel =====================
 function baseState(L, rnd, mode, hues = false) { // hues: the wordless mode, colour chains instead of words
-  M = hues ? 6 : 5; Core.setSize(M);
+  M = hues ? 9 : 5; R = hues ? 6 : 5; Core.setSize(M, R);
   const left = Object.fromEntries(L.goals.map((g) => [g.type, g.need]));
   return { mode, L, rnd, hues, grid: Core.freshGrid(rnd, { rates: L.rates, ensure: Core.ensureFor(left), hues }), board: L.board.slice(), hand: [], score: 0, moves: L.moves, left, shown: { ...left },
     combo: 0, chain: 0, lastWordAt: -1e9, colorTurn: 0, running: false, timeLeft: DUEL_SECONDS, extended: false, rival: null, extraMoves: 0, rec: null, passed: false, tickAt: 11 };
@@ -688,7 +688,7 @@ function addScore(p) { // every point also counts down a joker level's score goa
 }
 
 // ===================== letter field =====================
-function geo() { const el = $("gridwrap"), w = el.clientWidth, h = el.clientHeight, gap = Math.max(6, h * 0.03), size = (h - gap * (M - 1)) / M, sx = (w - gap * (M - 1)) / M; return { w, h, gap, size, sx, pitch: size + gap, px: sx + gap }; }
+function geo() { const el = $("gridwrap"); el.classList.toggle("sq", !!(G && G.hues)); const w = el.clientWidth, h = el.clientHeight, gap = Math.max(6, h * 0.03), size = (h - gap * (R - 1)) / R, sx = (w - gap * (M - 1)) / M; return { w, h, gap, size, sx, pitch: size + gap, px: sx + gap }; }
 const pos = (i, g) => [(i % M) * g.px, ((i / M) | 0) * g.pitch];
 const SHAPES = "●▲■◆★";
 function setTile(el, t) { const ch = Core.letterOf(t), hue = ch >= "1" && ch <= "5"; el.className = "tile " + Core.kindOf(t) + (hue ? " hue h" + ch : ""); el.firstChild.textContent = hue ? SHAPES[ch - 1] : ch; }
@@ -703,7 +703,7 @@ function buildTiles(rain) { // a fresh grid rains in from above, row by row
   const g = geo();
   tiles = G.grid.map((t, i) => {
     const tl = newTile(t, g), [x, y] = placeTile(tl, i, g);
-    if (rain) anim(tl.el, [{ transform: `translate(${x}px,${y - g.h - 40}px)` }, { transform: `translate(${x}px,${y}px)` }], { duration: 520, delay: (M - 1 - ((i / M) | 0)) * 70 + (i % M) * 30, easing: "cubic-bezier(.3,1.3,.6,1)", fill: "backwards" });
+    if (rain) anim(tl.el, [{ transform: `translate(${x}px,${y - g.h - 40}px)` }, { transform: `translate(${x}px,${y}px)` }], { duration: 520, delay: (R - 1 - ((i / M) | 0)) * 70 + (i % M) * 30, easing: "cubic-bezier(.3,1.3,.6,1)", fill: "backwards" });
     return tl;
   });
 }
@@ -724,7 +724,7 @@ function animateWord(usedPath, res, slotIdx) {
     anim(clone, [{ transform: `translate(${r.left}px,${r.top}px) scale(1)` }, { transform: `translate(${(r.left + tx) / 2}px,${Math.min(r.top, ty) - 30}px) scale(.85)`, offset: 0.4 }, { transform: `translate(${tx}px,${ty}px) scale(.2)`, opacity: 0.2 }],
       { duration: 460, delay: k * 50, easing: "cubic-bezier(.5,0,.7,1)", fill: "forwards" }).then(() => clone.remove());
   });
-  const next = new Array(M * M).fill(null);
+  const next = new Array(M * R).fill(null);
   for (const { from, to } of res.moves) {
     const tl = tiles[from]; next[to] = tl; setTile(tl.el, res.grid[to]);
     const [x0, y0] = pos(from, g), [x1, y1] = placeTile(tl, to, g);
@@ -734,7 +734,7 @@ function animateWord(usedPath, res, slotIdx) {
   for (const f of res.fresh) {
     const tl = newTile(res.grid[f], g), [x, y] = placeTile(tl, f, g); next[f] = tl;
     anim(tl.el, [{ transform: `translate(${x}px,${y - perCol[f % M] * g.pitch - 30}px)`, opacity: 0 }, { transform: `translate(${x}px,${y}px)`, opacity: 1 }],
-      { duration: 420, delay: 240 + (M - 1 - ((f / M) | 0)) * 60 + (f % M) * 20, easing: "cubic-bezier(.3,1.35,.6,1)", fill: "backwards" });
+      { duration: 420, delay: 240 + (R - 1 - ((f / M) | 0)) * 60 + (f % M) * 20, easing: "cubic-bezier(.3,1.35,.6,1)", fill: "backwards" });
   }
   tiles = next;
 }
@@ -842,7 +842,7 @@ function credit(type, n, from) {
 function tileAt(x, y) {
   const r = $("gridwrap").getBoundingClientRect(), g = geo();
   const c = Math.floor((x - r.left) / g.px), row = Math.floor((y - r.top) / g.pitch);
-  if (c < 0 || c >= M || row < 0 || row >= M) return null;
+  if (c < 0 || c >= M || row < 0 || row >= R) return null;
   return Math.hypot((x - (r.left + c * g.px + g.sx / 2)) / g.sx, (y - (r.top + row * g.pitch + g.size / 2)) / g.size) < 0.48 ? row * M + c : null; // oval hit zone so diagonal swipes slip between neighbours
 }
 const pattern = () => path.map((i) => Core.letterOf(G.grid[i])).join("");

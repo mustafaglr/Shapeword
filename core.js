@@ -7,7 +7,7 @@
   const DICT = new Set(words.DICT_WORDS.split(" "));
   const COMMON = words.COMMON_WORDS.split(" ");
   const COMMON_SET = new Set(COMMON);
-  let M = 5; // side of the letter field; setSize() changes it (the wordless mode plays on 6×6)
+  let M = 5, H = 5; // columns and rows of the letter field; setSize() changes them (the wordless mode plays on 9×6)
   const B = 9, BOX = 3, MIN_LEN = 3, MAX_LEN = 6, MIN_WORDS = 6;
   const BASE_RATES = { joker: 0.025, bomb: 0.05, gold: 0.06, crystal: 0 }; // chance per newly dropped tile
 
@@ -50,7 +50,7 @@
     for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
       if (!dr && !dc) continue;
       const rr = r + dr, cc = c + dc;
-      if (rr >= 0 && rr < n && cc >= 0 && cc < n) out.push(rr * n + cc);
+      if (rr >= 0 && rr < (n === M ? H : n) && cc >= 0 && cc < n) out.push(rr * n + cc);
     }
     return out;
   }
@@ -58,7 +58,7 @@
 
   // Every everyday word reachable by a path of distinct touching cells -> first path found (jokers match any letter)
   function findWords(grid) {
-    const found = new Map(), used = new Array(M * M).fill(false), path = [];
+    const found = new Map(), used = new Array(M * H).fill(false), path = [];
     function step(i, next) {
       used[i] = true; path.push(i);
       if (next.$ && !found.has(next.$)) found.set(next.$, path.slice());
@@ -70,7 +70,7 @@
       if (ch === "?") { for (const k in node) if (k !== "$") step(i, node[k]); }
       else if (node[ch]) step(i, node[ch]);
     }
-    for (let i = 0; i < M * M; i++) dfs(i, trie);
+    for (let i = 0; i < M * H; i++) dfs(i, trie);
     return found;
   }
 
@@ -96,7 +96,7 @@
   }
   // every chain on the grid as [chain, path], one per set of cells (the block only depends on the cells); capped, the grid is small
   function findChains(grid) {
-    const out = [], seen = new Set(), used = new Array(M * M).fill(false), path = []; let budget = 30000;
+    const out = [], seen = new Set(), used = new Array(M * H).fill(false), path = []; let budget = 30000;
     function walk(i, hue) {
       const ch = letterOf(grid[i]); if (used[i] || (ch !== "?" && hue && ch !== hue) || --budget < 0) return;
       const h = hue || (ch === "?" ? "" : ch);
@@ -105,7 +105,7 @@
       if (path.length < MAX_LEN) for (const j of neighbours(i, M)) walk(j, h);
       used[i] = false; path.pop();
     }
-    for (let i = 0; i < M * M; i++) walk(i, "");
+    for (let i = 0; i < M * H; i++) walk(i, "");
     return out;
   }
 
@@ -120,7 +120,7 @@
       if (k === word.length - 1 ? path.some((j) => allowed.has(j)) : shuffle(neighbours(i, M), rnd).some((j) => dfs(j, k + 1))) return true;
       used.delete(i); path.pop(); return false;
     }
-    for (const s of shuffle([...Array(M * M).keys()], rnd)) if (dfs(s, 0)) {
+    for (const s of shuffle([...Array(M * H).keys()], rnd)) if (dfs(s, 0)) {
       path.forEach((j, k) => { if (allowed.has(j) && letterOf(g[j]) !== word[k]) g[j] = word[k]; });
       return path;
     }
@@ -144,12 +144,12 @@
     const gone = new Set(removed), moves = [], fresh = [];
     for (let c = 0; c < M; c++) {
       const col = [];
-      for (let r = M - 1; r >= 0; r--) if (!gone.has(r * M + c)) col.push(r * M + c);
-      for (let k = 0; k < M; k++) { const to = (M - 1 - k) * M + c; if (k < col.length) moves.push({ from: col[k], to }); else fresh.push(to); }
+      for (let r = H - 1; r >= 0; r--) if (!gone.has(r * M + c)) col.push(r * M + c);
+      for (let k = 0; k < H; k++) { const to = (H - 1 - k) * M + c; if (k < col.length) moves.push({ from: col[k], to }); else fresh.push(to); }
     }
     const freshSet = new Set(fresh), wantPlant = rnd() < plantRate;
     for (let attempt = 0; attempt < 60; attempt++) {
-      const g = new Array(M * M);
+      const g = new Array(M * H);
       for (const m of moves) g[m.to] = grid[m.from];
       for (const f of fresh) g[f] = hues ? hueTile(rnd, rates) : randTile(rnd, rates);
       if (hues) { if (findChains(g).length >= 3) return { grid: ensureTiles(g, ensure, fresh, rnd), moves, fresh }; continue; }
@@ -160,9 +160,9 @@
     return { grid: g, moves: [], fresh: [...g.keys()] };
   }
   function freshGrid(rnd, { rates = BASE_RATES, ensure = [], hues = false } = {}) {
-    for (; hues; ) { const g = Array.from({ length: M * M }, () => hueTile(rnd, rates)); if (findChains(g).length >= 6) return ensureTiles(g, ensure, [...g.keys()], rnd); }
+    for (; hues; ) { const g = Array.from({ length: M * H }, () => hueTile(rnd, rates)); if (findChains(g).length >= 6) return ensureTiles(g, ensure, [...g.keys()], rnd); }
     for (;;) {
-      const g = Array.from({ length: M * M }, () => randTile(rnd, rates)), all = new Set(g.keys());
+      const g = Array.from({ length: M * H }, () => randTile(rnd, rates)), all = new Set(g.keys());
       for (const w of samplePlants(rnd).slice(0, 2)) { const p = plantWord(g, w, all, rnd); if (p) p.forEach((i) => all.delete(i)); }
       if (findWords(g).size >= MIN_WORDS + 2) return ensureTiles(g, ensure, [...g.keys()], rnd);
     }
@@ -387,8 +387,8 @@
     return best;
   }
 
-  const api = { M, B, BOX, MIN_LEN, MAX_LEN, BASE_RATES, WORLDS, BIOMES, OBST, REGIONS, worldOf, isWord, resolveWord, letterOf, kindOf, findWords, adjacent, shapeOf, makePiece,
+  const api = { M, H, B, BOX, MIN_LEN, MAX_LEN, BASE_RATES, WORLDS, BIOMES, OBST, REGIONS, worldOf, isWord, resolveWord, letterOf, kindOf, findWords, adjacent, shapeOf, makePiece,
     plantWord, resolveChain, findChains, collapse, freshGrid, shuffleGrid, ensureFor, rngFrom, levelDef, botMoves, isJoker, starsFor, wordPoints, clearPoints, wordProgress, boardProgress, progressOf, emptyBoard, newOb, canPlace, fits, place, bestMove };
-  api.setSize = (n) => { M = n; api.M = n; };
+  api.setSize = (cols, rows = cols) => { M = cols; H = rows; api.M = cols; api.H = rows; };
   if (typeof module !== "undefined") module.exports = api; else root.Core = api;
 })(typeof window !== "undefined" ? window : globalThis);
