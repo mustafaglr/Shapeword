@@ -74,7 +74,7 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
 
 // ===================== device settings, profile, local + cloud save =====================
 const store = { get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
-const prefs = { sfx: true, amb: true, vib: true, ...store.get("sw4:prefs", {}) }; // per device, not per player
+const prefs = { sfx: true, amb: true, vib: true, easy: true, ...store.get("sw4:prefs", {}) }; // per device, not per player
 snd.set(prefs);
 const buzz = (ms) => { if (prefs.vib) try { navigator.vibrate?.(ms); } catch {} }; // Android only; iOS ignores it
 for (const ev of ["pointerup", "touchend", "click", "keydown"]) addEventListener(ev, () => snd.unlock(), true); // browsers only start audio inside a gesture; a finger going down is not one yet, lifting it is (iOS: touchend)
@@ -446,7 +446,7 @@ $("gear").onclick = () => settings();
 
 // ---- settings (and the hidden admin tools) ----
 function settings() {
-  const togs = [["sfx", "Ses efektleri"], ["amb", "Ortam sesi"], ["vib", "Titreşim"]];
+  const togs = [["sfx", "Ses efektleri"], ["amb", "Ortam sesi"], ["vib", "Titreşim"], ["easy", "Rahat mod: bulunabilecek kelimeler gösterilir"]];
   card(`<h2>Ayarlar</h2>
     <div class="faces" id="s-faces"></div><input type="file" id="s-file" accept="image/*" hidden>
     <p class="hint">Karakterin ya da fotoğrafının küçük bir kopyası sıralamada ve haritada diğer oyunculara görünür.</p>
@@ -581,7 +581,12 @@ function intro(n) {
     <div class="stars">${[1, 2, 3].map((k) => star(k <= (profile.stars[n] || 0), 34)).join("")}</div>
     <p class="rec">${rec ? (rec.me ? `Rekor sende: ${rec.score} puan` : `Rekor: ${esc(rec.name)} · ${rec.score} puan`) : "Bu bölümde henüz rekor yok"}</p>
     ${ws ? `<p class="wsline">${svgIcon(ICONS.flame)}Galibiyet serisi ×${ws}: ${["joker", "joker ve altın harf", "joker, altın ve bomba harfi"][ws - 1]} ile başlıyorsun</p>` : "<p>Hepsini bitir ★★★ · %70 ★★ · %40 ★</p>"}
+    <div class="tabs" id="i-mode" role="tablist" aria-label="Oyun modu"><button role="tab" data-e="1" aria-selected="${!!prefs.easy}">Rahat</button><button role="tab" data-e="" aria-selected="${!prefs.easy}">Klasik</button></div>
+    <p class="modenote" id="i-note"></p>
     <button class="b3 xl green" id="i-go">Başla</button><button class="b3 ghost" id="i-back">Vazgeç</button>`, theme);
+  const note = () => ($("i-note").textContent = prefs.easy ? "Rahat: yazabileceğin kelimeler gösterilir; dokununca harfleri parlar. Rekor ve lig puanı yazılmaz." : "Klasik: kelimeleri kendin bulursun. Rekor ve lig puanı yazılır.");
+  $("i-mode").querySelectorAll("button").forEach((b) => (b.onclick = () => { prefs.easy = !!b.dataset.e; store.set("sw4:prefs", prefs); $("i-mode").querySelectorAll("button").forEach((x) => x.setAttribute("aria-selected", x === b)); note(); snd.play("toggle"); }));
+  note();
   $("i-go").onclick = () => startLevel(n); $("i-back").onclick = closeCard; playDemo();
 }
 function helpCard(L) {
@@ -610,7 +615,7 @@ function baseState(L, rnd, mode) {
 }
 function startLevel(n) {
   abandon();
-  G = baseState(Core.levelDef(n), Math.random, "level"); G.rec = recordOf(n);
+  G = baseState(Core.levelDef(n), Math.random, "level"); G.rec = recordOf(n); G.easy = !!prefs.easy;
   if (!G.L.joker) streakTiles(G.grid, Math.min(Meta.STREAK.length, meta().ws || 0));
   openScreen();
 }
@@ -791,7 +796,19 @@ function renderBoosters() {
     return `<button class="booster" data-b="${k}" aria-label="${BOOSTERS[k].name}, ${n ? n + " adet" : "reklam izleyerek"}">${icon(k)}${BOOSTERS[k].name}<span class="n${n ? "" : " ad"}">${n || "▶"}</span></button>`; }).join("");
   $("boosters").querySelectorAll(".booster").forEach((b) => (b.onclick = () => useBooster(b.dataset.b)));
 }
-function say(text, cls) { const w = $("wordline"); w.className = "wordline " + cls; w.textContent = text; }
+let idleT = 0;
+function say(text, cls) { const w = $("wordline"); w.className = "wordline " + cls; w.textContent = text; clearTimeout(idleT); if (G && G.easy) idleT = setTimeout(idleLine, 1800); }
+// Rahat mod: when nothing else is being said, the word line lists up to three words that are on the field and whose block fits the board.
+// Finding a word you are shown is far less work than thinking one up; tapping a chip lights its letters.
+function idleLine() {
+  if (!G || !G.easy || $("app").hidden) return;
+  if (swiping || busy || drag) { idleT = setTimeout(idleLine, 600); return; }
+  const list = G.hand.length >= 3 ? [] : [...Core.findWords(G.grid)].filter(([, p]) => Core.fits(G.board, Core.makePiece(G.grid, p))).sort((x, y) => Math.abs(x[0].length - 4.5) - Math.abs(y[0].length - 4.5)).slice(0, 3); // four and five letters first: easy to trace, and their blocks are easy to place
+  if (!list.length) return;
+  const w = $("wordline"); w.className = "wordline msg chips";
+  w.innerHTML = list.map(([word], i) => `<button class="wchip" data-i="${i}">${up(word)}</button>`).join("");
+  w.querySelectorAll(".wchip").forEach((b) => (b.onclick = () => { hintPath = list[+b.dataset.i][1]; markHint(); snd.play("tap"); }));
+}
 const chipOf = (type) => $("goals").querySelector(`[data-g="${type}"]`);
 // Goal progress: the count drops at once; the chip catches up as each unit flies in from where it was earned
 function credit(type, n, from) {
@@ -1081,17 +1098,17 @@ function levelEnd(stars, finishedAll) {
   const gifts = []; for (let s = prev + 1; s <= stars; s++) gifts.push(...GIFTS_PER_STAR[s]); // only newly earned stars pay out
   if (L.joker && !prev) gifts.push(...["karistir", "yenile", "ipucu", "joker"].sort(() => Math.random() - 0.5).slice(0, 2)); // joker levels give two extra gifts the first time
   gifts.forEach((k) => inv()[k]++);
-  const gain = Math.max(0, final - prevBest), beat = rec && !rec.me && final > rec.score; addWeek(gain);
+  const gain = G.easy ? 0 : Math.max(0, final - prevBest), beat = !G.easy && rec && !rec.me && final > rec.score; addWeek(gain);
   const m = meta(), tok = stars > prev ? (stars - prev) * Meta.PAY.star : Meta.PAY.replay; // new stars pay; a replay pays a little
   G.ended = true; m.tokens += tok; m.ws = Math.min(Meta.STREAK.length, (m.ws || 0) + 1); quest("win"); if (stars === 3) quest("three");
-  profile.stars[L.n] = Math.max(prev, stars); profile.best[L.n] = Math.max(prevBest, final); saveProfile(); renderBoosters();
+  profile.stars[L.n] = Math.max(prev, stars); if (!G.easy) profile.best[L.n] = Math.max(prevBest, final); saveProfile(); renderBoosters();
   const chestLine = pendingChests().length ? "Sandığın hazır: ana ekranda aç" : `Yıldız sandığı ★ ${totalStars() % Meta.STAR_STEP} / ${Meta.STAR_STEP}`;
   confetti(); snd.play("win", stars); for (let s = 1; s <= stars; s++) setTimeout(() => snd.play("star", s), 200 + (s - 1) * 250); if (beat) setTimeout(() => snd.play("record"), 1200);
   const recLine = beat ? `${esc(rec.name)} geride kaldı: bu bölümün rekoru artık sende!` : rec && !rec.me ? `Rekor hâlâ ${esc(rec.name)}'de: ${rec.score} puan` : prevBest && gain ? "Kendi rekorunu geçtin" : "";
   card(`<div class="lvlhead"><div class="stars">${[1, 2, 3].map((s, i) => star(s <= stars).replace("<svg", `<svg style="animation-delay:${0.2 + i * 0.25}s"`)).join("")}</div>
     <h2>Bölüm ${L.n + 1} ${stars === 3 ? "tamam!" : "geçildi"}</h2></div><div class="big" id="o-score">${G.score}</div>
     <p>${finishedAll ? (G.moves ? `Kalan ${G.moves} hamle × 20 = +${bonus}` : "Son hamlede bitirdin.") : `Hedeflerin bir kısmı kaldı. Tekrar oynayıp ${stars + 1}. yıldızı alabilirsin.`}</p>
-    ${recLine ? `<p class="rec">${recLine}</p>` : ""}${gain ? `<p>Haftalık lig: +${gain} puan</p>` : ""}
+    ${G.easy ? `<p class="modenote">Rahat modda rekor ve lig puanı yazılmaz.</p>` : recLine ? `<p class="rec">${recLine}</p>` : ""}${gain ? `<p>Haftalık lig: +${gain} puan</p>` : ""}
     <p class="earn">${COIN}+${tok} jeton · <span class="fl">${svgIcon(ICONS.flame)}</span>Seri ×${m.ws} · ${chestLine}</p>
     ${gifts.length ? `<h3>Hediyeler</h3><div class="gifts">${gifts.map((k, i) => `<div class="gift" style="animation-delay:${0.9 + i * 0.18}s">${icon(k)}<strong>+1</strong>${BOOSTERS[k].name}</div>`).join("")}</div>` : `<p>Bu yıldızların hediyelerini almıştın. Daha çok yıldız, daha çok hediye.</p>`}
     <button class="b3 xl green" id="o-next">Sonraki bölüm</button><div class="row2"><button class="b3 ghost" id="o-again">Tekrar</button><button class="b3 ghost" id="o-map">Harita</button></div>`, L.joker ? JOKER_THEME : THEMES[L.world]);
