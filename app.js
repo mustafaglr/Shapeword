@@ -454,7 +454,7 @@ function settings() {
     <div style="text-align:left"><label for="s-name"><strong>İsim</strong></label></div>
     <input class="field-in" id="s-name" maxlength="16" value="${esc(profile.name)}">
     <button class="b3 blue" id="s-save">İsmi kaydet</button>
-    <p style="font-size:.78rem">${cloudInfo}</p>
+    <p style="font-size:.78rem">${cloudInfo} · Sürüm ${window.SW_BUILD || "geliştirme"}</p>
     ${isAdmin() ? `<div class="admin"><h3>Admin</h3><p>Tüm bölümler açık, güçlendiriciler sınırsız.</p>
       <div class="row2"><input class="field-in" id="a-lvl" type="number" min="1" value="${nextLevel() + 1}" aria-label="Bölüm numarası"><button class="b3 ghost" id="a-go">Bölüme git</button></div>
       <div class="row2"><button class="b3 ghost" id="a-cup">+100 kupa</button><button class="b3 ghost" id="a-chest">Sandığı hazırla</button></div><button class="b3 ghost" id="a-quest">Görevleri tamamla</button>
