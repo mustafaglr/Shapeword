@@ -56,6 +56,8 @@ const ICONS = {
   rank: '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4zM17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>',
   help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7M12 17h.01"/>',
   lock: '<rect x="5" y="11" width="14" height="10" rx="2" fill="currentColor" stroke="none"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+  edit: '<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
   flame: '<path d="M12 3c1 3 4 4.5 4 8.5a4 4 0 0 1-8 0c0-1.5.6-2.5 1.5-3.5C9.5 9.5 11 8 12 3z" fill="currentColor" stroke="none"/>',
 };
 const svgIcon = (body) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
@@ -94,7 +96,7 @@ function mergeProfiles(a, b) { // same player on two devices: best result per le
   for (const [k, v] of Object.entries(b.best || {})) out.best[k] = Math.max(out.best[k] || 0, v);
   out.duelBest = Math.max(a.duelBest || 0, b.duelBest || 0);
   out.inv = (b.updated || 0) > (a.updated || 0) ? { ...b.inv } : { ...a.inv };
-  out.week = newer(a.week, b.week, "id", "pts"); out.duel = newer(a.duel, b.duel, "date", "score"); out.streak = newer(a.streak, b.streak, "last", "n");
+  out.week = newer(a.week, b.week, "id", "pts"); out.duel = newer(a.duel, b.duel, "date", "score"); out.streak = newer(a.streak, b.streak, "last", "n"); out.face = newer(a.face, b.face, "t", "t");
   out.updated = Math.max(a.updated || 0, b.updated || 0);
   return out;
 }
@@ -127,7 +129,10 @@ async function cloudSync() { // pull, merge both ways, push
     const justReset = profile.resetAt && (!mine || profile.resetAt > (mine.updated || 0)); // a reset overwrites the cloud copy instead of merging it back
     if (!justReset) profile = mergeProfiles(profile, mine);
     store.set("sw4:profile", profile);
-    all.players[profile.id] = { ...profile }; await cloudPut(all);
+    all.players[profile.id] = { ...profile };
+    // shortcut: a JSONBin bin holds about 100 KB; when it is nearly full the photo stays on this device only. Photos need real storage once there is a backend.
+    if (profile.face && profile.face.pic && JSON.stringify(all).length > 90000) all.players[profile.id].face = { t: profile.face.t };
+    await cloudPut(all);
     cloudPlayers = all.players; cloudInfo = `Bulut: kaydedildi ${stamp()}`;
   } catch (e) { cloudInfo = "Bulut: bağlantı yok, kayıt bu cihazda duruyor"; }
 }
@@ -144,7 +149,7 @@ function recordOf(n) { // the best score on a level, and whose it is
 // ===================== effects =====================
 const fx = $("fx"), fctx = fx.getContext("2d"); let parts = [], fxOn = false, fxLast = 0;
 function fxResize() { const d = devicePixelRatio || 1; fx.width = innerWidth * d; fx.height = innerHeight * d; fctx.setTransform(d, 0, 0, d, 0, 0); }
-addEventListener("resize", () => { fxResize(); layoutTiles(); }); fxResize();
+addEventListener("resize", () => { fxResize(); layoutTiles(); renderLanding(); }); fxResize();
 function burst(x, y, color, n, power = 1) {
   if (RM) return;
   for (let k = 0; k < n; k++) { const life = 0.55 + Math.random() * 0.45; parts.push({ x, y, vx: (Math.random() - 0.5) * 460 * power, vy: (-Math.random() * 420 - 60) * power, life, max: life, size: 3 + Math.random() * 6, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 14, color }); }
@@ -194,6 +199,11 @@ function paintScene(el, world) { // the world's horizon scene behind the home an
   if (el.dataset.world === String(world)) return;
   el.innerHTML = sceneCache[world] ||= Scenes.heroSVG(world, 420, 840); el.dataset.world = world;
 }
+function homeScene(world) { // on the home screen the scene fills the space above the panel, so its horizon stays in view; the panel itself sits on the night colour
+  const bg = $("homebg"), h = Math.max(220, Math.round($("homesheet").getBoundingClientRect().top + 80)), artH = Math.max(300, Math.min(840, Math.round((420 * h) / Math.min(innerWidth, 560) / 20) * 20)), key = world + ":" + artH;
+  bg.style.height = h + "px";
+  if (bg.dataset.world !== key) { bg.innerHTML = sceneCache[key] ||= Scenes.heroSVG(world, 420, artH); bg.dataset.world = key; }
+}
 function show(which, world) { // "landing" | "map" | "game"
   $("landing").hidden = which !== "landing"; $("mapview").hidden = which !== "map"; $("app").hidden = which !== "game"; $("gamebg").hidden = which !== "game";
   if (which !== "game") { busy = true; if (G) G.running = false; }
@@ -202,15 +212,59 @@ function show(which, world) { // "landing" | "map" | "game"
 function card(html, theme) { $("ov").innerHTML = `<div class="card"${theme ? ` style="--c1:${theme[0]};--c2:${theme[1]}"` : ""}>${html}</div>`; $("ov").hidden = false; $("ov").querySelector("button, input")?.focus(); snd.play("open"); }
 const closeCard = () => ($("ov").hidden = true);
 
+// ---- faces: a player is shown as the first letter of the name, a character, or a photo ----
+const faceSvg = (body) => `<svg viewBox="0 0 48 48" aria-hidden="true">${body}</svg>`, fromIcon = (icon) => faceSvg(`<g transform="translate(7 7) scale(.708)">${icon || ""}</g>`);
+const AVATARS = { // id: [name, background, drawing]
+  kedi: ["Kedi", "#FFE0B3", faceSvg('<path d="M10 8l3 14 9-7zM38 8l-3 14-9-7z" fill="#F29B38"/><circle cx="24" cy="27" r="15" fill="#F7B55A"/><circle cx="18" cy="25" r="2.2" fill="#2B2240"/><circle cx="30" cy="25" r="2.2" fill="#2B2240"/><path d="M22.5 30h3L24 32z" fill="#E0607A"/><path d="M24 32c-1 2-3 2.5-4.5 1.5M24 32c1 2 3 2.5 4.5 1.5M9 28l6 1M9 32l6-1M39 28l-6 1M39 32l-6-1" stroke="#2B2240" stroke-width="1.2" fill="none" stroke-linecap="round"/>')],
+  tilki: ["Tilki", "#FFD6C2", faceSvg('<path d="M8 7l4 16 10-8zM40 7l-4 16-10-8z" fill="#E8702A"/><path d="M24 12c9 0 15 7 15 14 0 4-7 13-15 13S9 30 9 26c0-7 6-14 15-14z" fill="#F08A3C"/><path d="M9 26c0 4 7 13 15 13s15-9 15-13c-5 0-9 3-15 9-6-6-10-9-15-9z" fill="#FFF4E6"/><circle cx="18" cy="24" r="2" fill="#2B2240"/><circle cx="30" cy="24" r="2" fill="#2B2240"/><circle cx="24" cy="34" r="2.2" fill="#2B2240"/>')],
+  panda: ["Panda", "#CFE8FF", faceSvg('<circle cx="11" cy="12" r="6" fill="#2B2240"/><circle cx="37" cy="12" r="6" fill="#2B2240"/><circle cx="24" cy="26" r="16" fill="#fff"/><ellipse cx="17" cy="25" rx="4.5" ry="5.5" fill="#2B2240" transform="rotate(-18 17 25)"/><ellipse cx="31" cy="25" rx="4.5" ry="5.5" fill="#2B2240" transform="rotate(18 31 25)"/><circle cx="17.5" cy="24.5" r="1.6" fill="#fff"/><circle cx="30.5" cy="24.5" r="1.6" fill="#fff"/><ellipse cx="24" cy="32" rx="2.4" ry="1.7" fill="#2B2240"/><path d="M21 35c1.5 1.6 4.5 1.6 6 0" stroke="#2B2240" stroke-width="1.3" fill="none" stroke-linecap="round"/>')],
+  kurbaga: ["Kurbağa", "#D8F5C8", faceSvg('<circle cx="15" cy="15" r="7" fill="#5CC46A"/><circle cx="33" cy="15" r="7" fill="#5CC46A"/><ellipse cx="24" cy="29" rx="17" ry="13" fill="#5CC46A"/><circle cx="15" cy="15" r="4.2" fill="#fff"/><circle cx="33" cy="15" r="4.2" fill="#fff"/><circle cx="15.5" cy="15.5" r="2.2" fill="#2B2240"/><circle cx="32.5" cy="15.5" r="2.2" fill="#2B2240"/><path d="M14 31c4 5 16 5 20 0" stroke="#256B33" stroke-width="1.8" fill="none" stroke-linecap="round"/><circle cx="12" cy="29" r="2.2" fill="#F59AB0" opacity=".7"/><circle cx="36" cy="29" r="2.2" fill="#F59AB0" opacity=".7"/>')],
+  baykus: ["Baykuş", "#F3E3C8", faceSvg('<path d="M10 10l6 6M38 10l-6 6" stroke="#7A5230" stroke-width="5" stroke-linecap="round"/><ellipse cx="24" cy="27" rx="15" ry="15.5" fill="#9B6B3F"/><ellipse cx="24" cy="34" rx="9" ry="7.5" fill="#E9CFA6"/><circle cx="17.5" cy="23" r="6.5" fill="#FFF4D6"/><circle cx="30.5" cy="23" r="6.5" fill="#FFF4D6"/><circle cx="17.5" cy="23" r="3" fill="#2B2240"/><circle cx="30.5" cy="23" r="3" fill="#2B2240"/><path d="M21.5 27.5h5L24 32z" fill="#F5A623"/>')],
+  tavsan: ["Tavşan", "#F9D3E3", faceSvg('<ellipse cx="17" cy="12" rx="4.5" ry="10" fill="#F4F0FA"/><ellipse cx="31" cy="12" rx="4.5" ry="10" fill="#F4F0FA"/><ellipse cx="17" cy="13" rx="2" ry="6.5" fill="#F7A8C0"/><ellipse cx="31" cy="13" rx="2" ry="6.5" fill="#F7A8C0"/><circle cx="24" cy="30" r="13.5" fill="#F4F0FA"/><circle cx="18.5" cy="28" r="2" fill="#2B2240"/><circle cx="29.5" cy="28" r="2" fill="#2B2240"/><path d="M22.5 32h3L24 34z" fill="#E0607A"/><path d="M24 34v2.5M24 36.5c-1.3 1.2-3 1.2-4 0M24 36.5c1.3 1.2 3 1.2 4 0" stroke="#2B2240" stroke-width="1.1" fill="none" stroke-linecap="round"/>')],
+  ayi: ["Ayı", "#F1DDC6", faceSvg('<circle cx="11.5" cy="13" r="6" fill="#8A5A3A"/><circle cx="36.5" cy="13" r="6" fill="#8A5A3A"/><circle cx="11.5" cy="13" r="3" fill="#C99774"/><circle cx="36.5" cy="13" r="3" fill="#C99774"/><circle cx="24" cy="27" r="16" fill="#A66E47"/><ellipse cx="24" cy="32" rx="7.5" ry="6" fill="#E3BE9B"/><circle cx="17.5" cy="24" r="2" fill="#2B2240"/><circle cx="30.5" cy="24" r="2" fill="#2B2240"/><ellipse cx="24" cy="29.8" rx="2.6" ry="1.9" fill="#2B2240"/><path d="M24 31.5v2M21.5 34.5c1.4 1.3 3.6 1.3 5 0" stroke="#2B2240" stroke-width="1.2" fill="none" stroke-linecap="round"/>')],
+  penguen: ["Penguen", "#CFE0FF", faceSvg('<ellipse cx="24" cy="26" rx="16" ry="17" fill="#2B2F4A"/><path d="M24 15c-7 0-11 6-11 12.5S18 41 24 41s11-7 11-13.500S31 15 24 15z" fill="#fff"/><path d="M24 12c-3.500 3.500-3.500 9 0 11.500 3.500-2.500 3.500-8 0-11.500z" fill="#2B2F4A"/><circle cx="18.5" cy="25" r="2" fill="#2B2240"/><circle cx="29.5" cy="25" r="2" fill="#2B2240"/><path d="M20.500 29h7L24 33.500z" fill="#F5A623"/><circle cx="14.500" cy="30" r="2.200" fill="#F59AB0" opacity=".7"/><circle cx="33.500" cy="30" r="2.200" fill="#F59AB0" opacity=".7"/>')],
+  yengec: ["Yengeç", "#CDEBFF", fromIcon(ART.yengec)],
+  hayalet: ["Hayalet", "#3A3470", fromIcon(ART.hayalet)],
+};
+const PIC_OK = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]{100,24000}$/; // a photo in the cloud save is someone else's data: nothing but a small picture may reach the page
+const LETTER_BG = ["#4D7CFE", "#E5534F", "#1FA97A", "#9B5DE5", "#E08A00", "#1AA3A3"];
+function avatar(p, cls = "") {
+  const f = (p && p.face) || {}, name = (p && p.name) || "?";
+  if (typeof f.pic === "string" && PIC_OK.test(f.pic)) return `<span class="ava ${cls}"><img src="${f.pic}" alt=""></span>`;
+  if (Object.keys(AVATARS).includes(f.av)) return `<span class="ava ${cls}" style="background:${AVATARS[f.av][1]}">${AVATARS[f.av][2]}</span>`;
+  const bg = LETTER_BG[[...name].reduce((s, ch) => s + ch.codePointAt(0), 0) % LETTER_BG.length];
+  return `<span class="ava ${cls}" style="background:${bg}">${esc(up([...name][0] || "?"))}</span>`;
+}
+async function photoFace(file) { // any picture becomes a small square JPEG; the original never leaves the device
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = url; });
+    const S = 80, c = document.createElement("canvas"), k = Math.min(img.naturalWidth, img.naturalHeight), x = c.getContext("2d");
+    c.width = c.height = S; x.imageSmoothingQuality = "high";
+    x.drawImage(img, (img.naturalWidth - k) / 2, (img.naturalHeight - k) / 2, k, k, 0, 0, S, S);
+    return c.toDataURL("image/jpeg", 0.75);
+  } finally { URL.revokeObjectURL(url); }
+}
+function setFace(f) { profile.face = { t: Date.now(), ...f }; saveProfile(); renderLanding(); }
+function paintFaces() { // the picker on the settings card: the letter, the characters, a photo
+  const f = profile.face || {}, known = Object.keys(AVATARS).includes(f.av), hasPic = typeof f.pic === "string" && PIC_OK.test(f.pic);
+  $("s-faces").innerHTML = `<button class="face" data-av="" aria-pressed="${!hasPic && !known}" aria-label="İsmimin baş harfi">${avatar({ name: profile.name })}</button>`
+    + Object.entries(AVATARS).map(([k, a]) => `<button class="face" data-av="${k}" aria-pressed="${!hasPic && f.av === k}" aria-label="${a[0]}">${avatar({ face: { av: k } })}</button>`).join("")
+    + `<button class="face" id="s-photo" aria-pressed="${hasPic}" aria-label="Fotoğraf seç">${hasPic ? avatar(profile) : `<span class="ava cam">${svgIcon(ICONS.camera)}</span>`}</button>`;
+  $("s-faces").querySelectorAll("[data-av]").forEach((b) => (b.onclick = () => { setFace(b.dataset.av ? { av: b.dataset.av } : {}); paintFaces(); }));
+  $("s-photo").onclick = () => $("s-file").click();
+}
+
 // ---- home: the current world as a backdrop, one big play button ----
 function landing() {
   const world = profile ? worldOf(nextLevel()) : 0;
-  show("landing", world); closeCard(); paintScene($("homebg"), world);
+  show("landing", world); closeCard();
   if (!profile) {
-    $("homemid").innerHTML = `<p class="hello">Kelime yaz, çizdiğin yol blok olsun, tahtada patlat.</p>`;
+    $("homesheet").classList.remove("has-face"); $("homemid").innerHTML = `<p class="hello">Kelime yaz, çizdiğin yol blok olsun, tahtada patlat.</p>`;
     $("homesheet").innerHTML = `<form class="nameform" id="nameform"><label for="name-in">Adın ne?</label><input class="field-in" id="name-in" maxlength="16" autocomplete="nickname" placeholder="Örneğin Mustafa" required>
       <button class="b3 xl" type="submit">Başla</button></form>
       <p class="cloudline">İsmin sıralamada görünür. Başka bir cihazda aynı ismi yazarsan kaldığın yerden devam edersin.</p>`;
+    homeScene(world);
     $("nameform").onsubmit = async (e) => {
       e.preventDefault(); const name = $("name-in").value.trim(); if (!name) return;
       profile = blankProfile(name);
@@ -226,18 +280,20 @@ function landing() {
 const streakOn = () => profile.streak && (profile.streak.last === TODAY || profile.streak.last === YESTERDAY);
 function renderLanding() {
   if ($("landing").hidden || !profile) return;
-  const n = nextLevel(), done = Object.keys(profile.stars).length;
-  paintScene($("homebg"), worldOf(n));
-  $("homemid").innerHTML = `<div class="me">${esc(up(profile.name[0] || "?"))}</div><p class="hello">Merhaba ${esc(profile.name)}${isAdmin() ? " · admin" : ""}</p>
-    <span class="chip">${Core.BIOMES[worldOf(n)]} dünyası · Bölüm ${n + 1}</span>`;
-  $("homesheet").innerHTML = `<button class="b3 xl" id="l-go">OYNA · Bölüm ${n + 1}</button>
-    <div class="statrow"><span class="chip"><b>★</b> ${totalStars()}</span><span class="chip">${done} bölüm</span>${streakOn() ? `<span class="chip"><b>${svgIcon(ICONS.flame)}</b> ${profile.streak.n} gün</span>` : ""}<span class="chip">Lig ${profile.week && profile.week.id === WEEK ? profile.week.pts : 0}</span></div>
+  const n = nextLevel(), done = Object.keys(profile.stars).length, w = worldOf(n), stat = (v, label) => `<div><strong>${v}</strong><small>${label}</small></div>`;
+  $("homemid").innerHTML = ""; $("homesheet").classList.add("has-face");
+  $("homesheet").innerHTML = `<button class="facebtn" id="l-face" aria-label="Karakterini ya da fotoğrafını değiştir">${avatar(profile)}<i>${svgIcon(ICONS.edit)}</i></button>
+    <div class="whoami"><small>Merhaba</small><strong>${esc(profile.name)}</strong>${isAdmin() ? "<em>admin</em>" : ""}</div>
+    <div class="prog"><span>${Core.BIOMES[w]} dünyası</span><div><i style="width:${(n % 10) * 10}%"></i></div><span>${n % 10} / 10</span></div>
+    <button class="b3 xl" id="l-go">OYNA · Bölüm ${n + 1}</button>
+    <div class="stats">${stat(totalStars(), "Yıldız")}${stat(done, "Bölüm")}${stat(streakOn() ? profile.streak.n : 0, "Gün serisi")}${stat(profile.week && profile.week.id === WEEK ? profile.week.pts : 0, "Lig puanı")}</div>
     <div class="tiles">
       <button class="tilebtn" id="l-map">${svgIcon(ICONS.map)}Harita</button><button class="tilebtn" id="l-duel">${svgIcon(ICONS.duel)}Düello</button>
       <button class="tilebtn" id="l-rank">${svgIcon(ICONS.rank)}Sıralama</button><button class="tilebtn" id="l-help">${svgIcon(ICONS.help)}Nasıl?</button>
     </div>
     <p class="cloudline">${cloudInfo}</p>`;
-  $("l-go").onclick = () => intro(n); $("l-map").onclick = openMap; $("l-duel").onclick = startDuel; $("l-help").onclick = () => helpCard(null); $("l-rank").onclick = () => rankCard();
+  homeScene(w);
+  $("l-face").onclick = settings; $("l-go").onclick = () => intro(n); $("l-map").onclick = openMap; $("l-duel").onclick = startDuel; $("l-help").onclick = () => helpCard(null); $("l-rank").onclick = () => rankCard();
 }
 // ---- daily reward: once a day, a 7-day cycle; a missed day starts the cycle again ----
 const DAILY = [["ipucu"], ["karistir"], ["yenile"], ["joker"], ["ipucu", "karistir"], ["yenile", "joker"], ["karistir", "yenile", "ipucu", "joker"]];
@@ -265,7 +321,7 @@ function rankCard(tab = "week") {
   card(`<h2>Sıralama</h2>
     <div class="tabs" role="tablist">${[["week", "Haftalık"], ["duel", "Düello"], ["stars", "Yıldız"]].map(([k, t]) => `<button role="tab" data-t="${k}" aria-selected="${k === tab}">${t}</button>`).join("")}</div>
     <p>${cloudPlayers ? view.note : "Bulut bağlı değil: yalnızca bu cihaz görünüyor."}</p>
-    <div class="lb">${top.map((r) => `<div class="${r.p.id === profile.id ? "me" : ""}"><span>${rows.indexOf(r) + 1}</span><span>${esc(r.p.name)}</span><small>${r.sub}</small><strong>${tab === "stars" ? "★ " : ""}${r.v}</strong></div>`).join("") || `<p>${view.empty}</p>`}</div>
+    <div class="lb">${top.map((r) => `<div class="${r.p.id === profile.id ? "me" : ""}"><span>${rows.indexOf(r) + 1}</span><span class="who">${avatar(r.p)}<span>${esc(r.p.name)}</span></span><small>${r.sub}</small><strong>${tab === "stars" ? "★ " : ""}${r.v}</strong></div>`).join("") || `<p>${view.empty}</p>`}</div>
     <button class="b3 ghost" id="r-close">Kapat</button>`);
   $("ov").querySelectorAll(".tabs button").forEach((b) => (b.onclick = () => rankCard(b.dataset.t)));
   $("r-close").onclick = closeCard;
@@ -276,6 +332,8 @@ $("gear").onclick = () => settings();
 function settings() {
   const togs = [["sfx", "Ses efektleri"], ["amb", "Ortam sesi"], ["vib", "Titreşim"]];
   card(`<h2>Ayarlar</h2>
+    <div class="faces" id="s-faces"></div><input type="file" id="s-file" accept="image/*" hidden>
+    <p class="hint">Karakterin ya da fotoğrafının küçük bir kopyası sıralamada ve haritada diğer oyunculara görünür.</p>
     <div class="togs">${togs.map(([k, t]) => `<button class="tog" data-p="${k}" aria-pressed="${prefs[k]}">${t}<i></i></button>`).join("")}</div>
     <div style="text-align:left"><label for="s-name"><strong>İsim</strong></label></div>
     <input class="field-in" id="s-name" maxlength="16" value="${esc(profile.name)}">
@@ -289,6 +347,11 @@ function settings() {
   $("ov").querySelectorAll(".tog").forEach((b) => (b.onclick = () => {
     const k = b.dataset.p; prefs[k] = !prefs[k]; store.set("sw4:prefs", prefs); b.setAttribute("aria-pressed", prefs[k]); snd.set(prefs); snd.play("toggle"); if (k === "vib") buzz(20);
   }));
+  paintFaces();
+  $("s-file").onchange = async (e) => {
+    const file = e.target.files[0]; e.target.value = ""; if (!file) return;
+    try { setFace({ pic: await photoFace(file) }); paintFaces(); toast("Fotoğrafın ayarlandı"); } catch (err) { toast("Bu dosya resim olarak açılamadı"); }
+  };
   $("s-save").onclick = () => {
     const name = $("s-name").value.trim(); if (!name) return;
     const wasAdmin = isAdmin(); profile.name = name; profile.id = idOf(name); saveProfile();
@@ -325,10 +388,10 @@ function openMap() {
   for (const p of others().sort((a, b) => totalStars(b) - totalStars(a)).slice(0, 12)) {
     const at = nextLevel(p); if (at >= lastShown) continue;
     const k = (here[at] = (here[at] || 0) + 1) - 1; if (k > 2) continue;
-    html += `<div class="fpin" style="left:${pts[at][0]}px;top:${pts[at][1]}px;--k:${k}" aria-label="${esc(p.name)}, bölüm ${at + 1}">${esc(up(p.name[0] || "?"))}</div>`;
+    html += `<div class="fpin" style="left:${pts[at][0]}px;top:${pts[at][1]}px;--k:${k}" aria-label="${esc(p.name)}, bölüm ${at + 1}">${avatar(p)}</div>`;
   }
   const [ax, ay] = pts[Math.min(nx, lastShown - 1)];
-  html += `<div class="pin" style="left:${ax}px;top:${ay}px"><div>${esc(up(profile.name[0] || "?"))}</div></div>`;
+  html += `<div class="pin" style="left:${ax}px;top:${ay}px">${avatar(profile)}</div>`;
   inner.innerHTML = html;
   inner.querySelectorAll(".node:not(.locked)").forEach((b) => (b.onclick = () => intro(+b.dataset.n)));
   $("map-stars").innerHTML = `<b>★</b> ${totalStars()}`;

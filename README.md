@@ -14,6 +14,7 @@ Telefonda tarayıcıdan açıp "Ana Ekrana Ekle" dersen kendi simgesiyle tam ekr
 - **Sesler:** hepsi tarayıcıda üretilir. Kaydırdığın her harf dünyanın gamında bir nota çalar; her engelin kendi sesi, her dünyanın kendi ortam sesi var. Ayarlar'dan kapatılabilir.
 - **Rekabet:** haftalık lig, günlük düello (o gün oynamış gerçek bir oyuncu varsa rakip odur), bölüm rekorları, haritada diğer oyuncular.
 - **Günlük ödül:** 7 günlük seri.
+- **Karakter:** varsayılan ismin baş harfi; Ayarlar'dan 10 karakterden biri ya da cihazdan bir fotoğraf seçilebilir. Fotoğraf cihazda 80×80 küçük bir kopyaya çevrilir; yalnızca bu kopya bulut kaydına yazılır ve diğer oyunculara görünür.
 - **Bulut kaydı:** ilk açılışta ismini sorar; aynı isimle başka cihazdan girersen kaldığın yerden devam edersin (JSONBin; şifre yok, test sürümü).
 
 ## Dosyalar
