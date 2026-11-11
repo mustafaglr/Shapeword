@@ -307,7 +307,7 @@ function settings() {
 // ---- saga map: one illustrated landscape, worlds blending into each other, level 1 at the bottom ----
 let mapCurrentY = 0;
 function openMap() {
-  const nx = nextLevel(), WN = Core.WORLDS.length, lastShown = isAdmin() ? Math.max(WN * 10, (Math.floor(nx / 10) + 2) * 10) : (Math.floor(nx / 10) + 2) * 10;
+  const nx = nextLevel(), WN = Core.WORLDS.length, lastShown = Math.max(WN * 10, (Math.floor(nx / 10) + 2) * 10); // everyone sees every world; what is not reached yet is locked
   show("map", worldOf(nx)); closeCard();
   const inner = $("mapinner"), W = Math.min(480, innerWidth), STEP = 96, PAD = 110, H = lastShown * STEP + PAD + 150;
   inner.style.height = H + "px";
