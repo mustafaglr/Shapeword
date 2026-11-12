@@ -676,7 +676,6 @@ const DEMOS = {
     ["Onbb./nnb../bbb..", "Yanındaki kareleri en son, tek blokla kapat."], ["*xxb./xxx../xxx..", "Kutusu (ya da satırı, sütunu) dolunca boşluk kapanır."], ["...b./...../....."]],
 };
 const demoHTML = (kind, cls = "") => (DEMOS[kind] ? `<div class="demo${cls}" data-kind="${kind}" aria-hidden="true"><div class="demogrid"></div><p></p></div>` : "");
-const demoMs = (f) => (f[1] ? 2300 : 1000); // a frame with a caption stays long enough to be read
 function demoFrame(kind, frame) {
   const ob = (cls = "", badge = "", icon = kind) => `<div class="cell ob${cls}" data-ob="${kind}"><b>${obIcon(icon)}${badge}</b></div>`;
   const block = (color, cls = "") => `<div class="cell on${cls}"><b style="background:${color}"></b></div>`;
@@ -687,16 +686,14 @@ function demoFrame(kind, frame) {
     return i % 5 > 2 ? out.replace('class="cell', 'class="cell bx') : out; // the neighbouring box is shaded, as on the board
   }).join("");
 }
-function playDemo(done) { // call once the card is on screen; it stops by itself when the card goes. done: every demo on the card has played through once
-  const all = [...$("ov").querySelectorAll(".demo")]; let open = all.length;
-  all.forEach((el) => {
-    const frames = DEMOS[el.dataset.kind]; let k = -1, once = false;
+function playDemo() { // call once the card is on screen; it stops by itself when the card goes
+  $("ov").querySelectorAll(".demo").forEach((el) => {
+    const frames = DEMOS[el.dataset.kind]; let k = -1;
     const step = () => {
       if (!el.isConnected || $("ov").hidden) return;
       k = (k + 1) % frames.length; el.firstChild.innerHTML = demoFrame(el.dataset.kind, frames[k][0]);
       if (frames[k][1]) el.lastChild.textContent = frames[k][1];
-      const fin = () => { if (k === frames.length - 1 && !once) { once = true; if (!--open && done) done(); } };
-      if (RM) fin(); else setTimeout(() => { fin(); step(); }, demoMs(frames[k]));
+      if (!RM) setTimeout(step, frames[k][1] ? 2300 : 1000);
     };
     if (RM) { el.classList.add("manual"); el.onclick = step; } // no motion wanted: the player taps through the steps
     step();
@@ -717,15 +714,13 @@ function firstOf(t) {
 // A new goal or obstacle that has an animation is shown moving as its level opens, once on this device: nobody opens the "?" card.
 // Level 1's is left to the coach, who teaches it on the board.
 const unseen = (L) => (L.n > 0 ? L.goals.map((g) => g.type).filter((t) => DEMOS[t] && firstOf(t) === L.n && !(prefs.shown || {})[t]) : []);
-function newRule() { // the level is open behind the card; Anladım wakes when the animation has played through
+function newRule() { // the level is open behind the card; Anladım closes it at any time: watching is offered, not forced
   const L = G.L, kinds = unseen(L); if (!kinds.length) return;
   busy = true;
   card(`<div class="lvlhead"><span class="badge plain">${Core.OBST[kinds[0]] ? "Yeni engel" : "Yeni hedef"}</span><h2>${kinds.map((t) => goalOf(t).name).join(" · ")}</h2></div>
-    ${kinds.map((t) => demoHTML(t, " big")).join("")}<i class="watch" style="--t:${Math.max(...kinds.map((t) => DEMOS[t].reduce((s, f) => s + demoMs(f), 0)))}ms"></i>
-    <button class="b3 xl green" id="n-go" disabled>İzle…</button>`, THEMES[L.world]);
-  const go = $("n-go");
-  go.onclick = () => { prefs.shown = { ...prefs.shown, ...Object.fromEntries(kinds.map((t) => [t, 1])) }; store.set("sw4:prefs", prefs); closeCard(); busy = false; lastTick = performance.now(); };
-  playDemo(() => { go.disabled = false; go.textContent = "Anladım"; });
+    ${kinds.map((t) => demoHTML(t, " big")).join("")}<button class="b3 xl green" id="n-go">Anladım</button>`, THEMES[L.world]);
+  $("n-go").onclick = () => { prefs.shown = { ...prefs.shown, ...Object.fromEntries(kinds.map((t) => [t, 1])) }; store.set("sw4:prefs", prefs); closeCard(); busy = false; lastTick = performance.now(); };
+  playDemo();
 }
 // What the three stars are for, in one line: finishing, moves to spare, the time. A bonus level's stars are score steps.
 const starRule = (L) => (L.joker ? [0.4, 0.7, 1].map((f, i) => `${"★".repeat(i + 1)} ${Math.round(L.goals[0].need * f)}`).join(" · ") + " puan"

@@ -120,11 +120,8 @@ main { position: relative; z-index: 1; max-width: 430px; margin: 0 auto; display
 main[hidden] ~ #finger, main[hidden] ~ #coachtip, #ov:not([hidden]) ~ #finger, #ov:not([hidden]) ~ #coachtip { display: none; }
 #app[data-coach="swipe"] :is(.hand, .board, .boosters), #app[data-coach="drop"] :is(.field, .boosters) { opacity: .3; pointer-events: none; }
 #board .cell.aim > b { box-shadow: inset 0 0 0 3px var(--green), 0 0 10px 2px rgba(43,196,138,.85); background: #C9F2DF; animation: willpulse .7s ease-in-out infinite alternate; }
-/* a new goal or obstacle, shown as its level opens: a larger demo and a bar that fills while it plays through */
+/* a new goal or obstacle, shown as its level opens: a larger demo */
 .demo.big .demogrid { grid-template-columns: repeat(5, 46px); } .demo.big p { font-size: 1rem; min-height: 3.9em; }
-.watch { display: block; height: 6px; border-radius: 3px; background: var(--well); overflow: hidden; } .watch::after { content: ""; display: block; height: 100%; background: var(--green); transform-origin: left; animation: watch var(--t) linear both; }
-@keyframes watch { from { transform: scaleX(0); } }
-@media (prefers-reduced-motion: reduce) { .watch { display: none; } }
 /* obstacles: an icon from scenes.js fills the cell; a few states sit on top */
 .cell.ob > b { box-shadow: none; transition: opacity .3s; }
 .cell.ob > b svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; }
