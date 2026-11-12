@@ -86,7 +86,7 @@ for (const ev of ["pointerup", "touchend", "click", "keydown"]) addEventListener
 addEventListener("click", (e) => { if (e.target.closest && e.target.closest("button")) snd.play("tap"); }, true);
 
 const idOf = (name) => name.trim().replace(/\s+/g, " ").toLocaleLowerCase("tr");
-const blankProfile = (name) => ({ name, id: idOf(name), stars: {}, best: {}, duelBest: 0, inv: { karistir: 2, yenile: 1, ipucu: 2, joker: 1 }, updated: Date.now() });
+const blankProfile = (name) => ({ name, id: idOf(name), born: Date.now(), stars: {}, best: {}, duelBest: 0, inv: { karistir: 2, yenile: 1, ipucu: 2, joker: 1 }, updated: Date.now() }); // born: a full reset drops everyone made before it
 let profile = store.get("sw4:profile", null);
 const isAdmin = () => profile && profile.id === "admin"; // the hidden switch: play under the name "admin" and every level opens, boosters are free
 const inv = () => profile.inv;
@@ -171,8 +171,16 @@ let cloudInfo = CLOUD ? "Bulut: bağlanıyor…" : "Bulut kapalı: kayıt sadece
 async function cloudGet() {
   const r = await fetch(CLOUD.url + "/latest", { headers: { [CLOUD.header || "X-Master-Key"]: CLOUD.key, "X-Bin-Meta": "false" }, cache: "no-store" });
   if (!r.ok) throw new Error("HTTP " + r.status);
-  const data = await r.json();
-  return data && data.app === "shapeword" && data.players ? data : { app: "shapeword", players: {} };
+  const data = await r.json(), all = data && data.app === "shapeword" && data.players ? data : { app: "shapeword", players: {} }, cut = +all.resetAt || 0;
+  if (cut) { // after a full reset nobody made before it comes back, not even from a phone still running an older copy
+    for (const k of Object.keys(all.players)) if (!all.players[k] || !(+all.players[k].born >= cut)) delete all.players[k];
+    if (all.duels && typeof all.duels === "object") for (const k of Object.keys(all.duels)) if (!(+(all.duels[k] || {}).t >= cut)) delete all.duels[k];
+  }
+  return all;
+}
+function startOver() { // the whole game was reset in the cloud: this device forgets its player and starts at the name screen
+  profile = null; G = null; try { localStorage.removeItem("sw4:profile"); } catch {}
+  prefs.tut = false; store.set("sw4:prefs", prefs); closeCard(); landing(); toast("Oyun sıfırlandı: baştan başlıyorsun");
 }
 async function cloudPut(data) {
   const r = await fetch(CLOUD.url, { method: "PUT", headers: { "Content-Type": "application/json", [CLOUD.header || "X-Master-Key"]: CLOUD.key }, body: JSON.stringify(data) });
@@ -182,7 +190,8 @@ const stamp = () => new Date().toLocaleTimeString("tr-TR", { hour: "2-digit", mi
 async function cloudSync() { // pull, merge both ways, push
   if (!CLOUD || !profile) return;
   try {
-    const all = await cloudGet(), mine = all.players[profile.id];
+    const all = await cloudGet(); if (all.resetAt && !(+profile.born >= +all.resetAt)) return startOver();
+    const mine = all.players[profile.id];
     const justReset = profile.resetAt && (!mine || profile.resetAt > (mine.updated || 0)); // a reset overwrites the cloud copy instead of merging it back
     if (!justReset) profile = mergeProfiles(profile, mine);
     store.set("sw4:profile", profile);
@@ -782,7 +791,10 @@ function openScreen() {
 function fitGame() { // a short screen (Safari's bars, a small phone): shrink the letter field and the board until the game needs no scrolling
   if ($("app").hidden) return;
   const root = document.documentElement; root.style.removeProperty("--fit");
-  for (let k = 1; k > 0.6 && root.scrollHeight > innerHeight + 1; ) { k -= 0.04; root.style.setProperty("--fit", k.toFixed(2)); }
+  for (let k = 1, was = root.scrollHeight; k > 0.6 && was > innerHeight + 1; ) {
+    k -= 0.04; root.style.setProperty("--fit", k.toFixed(2));
+    const now = root.scrollHeight; if (now >= was) { root.style.removeProperty("--fit"); break; } was = now; // shrinking did not help: the overflow is not ours to fix, keep full size
+  }
   layoutTiles();
 }
 // The daily rival: the best real player who already played today, else a simulated one. A real rival's score follows the recording of that run when there is one.
