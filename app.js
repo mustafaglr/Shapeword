@@ -184,7 +184,7 @@ async function cloudGet() {
 }
 function startOver() { // the whole game was reset in the cloud: this device forgets its player and starts at the name screen
   profile = null; G = null; try { localStorage.removeItem("sw4:profile"); } catch {}
-  prefs.tut = false; prefs.stage = 0; store.set("sw4:prefs", prefs); closeCard(); landing(); toast("Oyun sıfırlandı: baştan başlıyorsun");
+  prefs.tut = false; prefs.stage = 0; prefs.shown = {}; store.set("sw4:prefs", prefs); closeCard(); landing(); toast("Oyun sıfırlandı: baştan başlıyorsun");
 }
 async function cloudPut(data) {
   const r = await fetch(CLOUD.url, { method: "PUT", headers: { "Content-Type": "application/json", [CLOUD.header || "X-Master-Key"]: CLOUD.key }, body: JSON.stringify(data) });
@@ -223,7 +223,7 @@ function recordOf(n) { // the best score on a level, and whose it is
 // ===================== effects =====================
 const fx = $("fx"), fctx = fx.getContext("2d"); let parts = [], fxOn = false, fxLast = 0;
 function fxResize() { const d = devicePixelRatio || 1; fx.width = innerWidth * d; fx.height = innerHeight * d; fctx.setTransform(d, 0, 0, d, 0, 0); }
-addEventListener("resize", () => { fxResize(); fitGame(); renderLanding(); }); fxResize();
+addEventListener("resize", () => { fxResize(); fitGame(); renderLanding(); coach(); }); fxResize();
 // Particles are Kenney "Particle Pack" shapes (CC0, art/fx): white stars and sparkles painted in the burst's colour; squares until they load
 const SPRITES = ["symbol_02", "star_06", "star_07", "circle_05"].map((n) => { const i = new Image(); i.src = `art/fx/${n}.png`; return i; }), tinted = {};
 function tint(k, color) {
@@ -499,7 +499,7 @@ function renderLanding() {
     if (b) { b.removeAttribute("id"); b.textContent = `Bölüm ${at}`; } el.querySelector(".dot")?.remove(); el.insertAdjacentHTML("beforeend", `<i class="lk">${svgIcon(ICONS.lock)}</i>`);
   }
   const on = (id, fn) => { const el = $(id); if (el) el.onclick = el.classList.contains("locked") ? () => toast(`Bölüm ${el.dataset.at}'te açılır`) : fn; };
-  on("l-face", settings); on("l-go", () => intro(n)); on("l-map", openMap); on("l-duel", duelHub); on("l-help", () => howTo()); on("l-rank", () => rankCard()); on("l-shop", () => shopCard());
+  on("l-face", settings); on("l-go", () => (!prefs.tut && !n ? startLevel(0) : intro(n))); /* a new player has nothing to read first: level 1 opens with the coach */ on("l-map", openMap); on("l-duel", duelHub); on("l-help", () => howTo()); on("l-rank", () => rankCard()); on("l-shop", () => shopCard());
   on("l-tier", () => rankCard("cups")); on("l-quest", questCard);
   on("l-free", () => (meta().freeAt <= Date.now() ? chestCard("free") : toast(`Bedava sandık ${hms(meta().freeAt - Date.now())} sonra açılır`)));
   on("l-box", () => { const k = pendingChests()[0]; if (k) chestCard(k); else toast(`Yıldız sandığına ${Meta.STAR_STEP - (totalStars() % Meta.STAR_STEP)} yıldız kaldı`); });
@@ -671,7 +671,8 @@ const DEMOS = {
   bosluk: [["O..../...../.....", "Boşluk, koyduğun her blokta bitişiğindeki bir bloğunu yutar."], ["Onnn./...../....."], ["Oebb./...../....."], ["O.bb./..n../nnn..", "Önce boşluğa değmeyen kareleri doldur."],
     ["Onbb./nnb../bbb..", "Yanındaki kareleri en son, tek blokla kapat."], ["*xxb./xxx../xxx..", "Kutusu (ya da satırı, sütunu) dolunca boşluk kapanır."], ["...b./...../....."]],
 };
-const demoHTML = (kind) => (DEMOS[kind] ? `<div class="demo" data-kind="${kind}" aria-hidden="true"><div class="demogrid"></div><p></p></div>` : "");
+const demoHTML = (kind, cls = "") => (DEMOS[kind] ? `<div class="demo${cls}" data-kind="${kind}" aria-hidden="true"><div class="demogrid"></div><p></p></div>` : "");
+const demoMs = (f) => (f[1] ? 2300 : 1000); // a frame with a caption stays long enough to be read
 function demoFrame(kind, frame) {
   const ob = (cls = "", badge = "", icon = kind) => `<div class="cell ob${cls}" data-ob="${kind}"><b>${obIcon(icon)}${badge}</b></div>`;
   const block = (color, cls = "") => `<div class="cell on${cls}"><b style="background:${color}"></b></div>`;
@@ -682,14 +683,16 @@ function demoFrame(kind, frame) {
     return i % 5 > 2 ? out.replace('class="cell', 'class="cell bx') : out; // the neighbouring box is shaded, as on the board
   }).join("");
 }
-function playDemo() { // call once the card is on screen; it stops by itself when the card goes
-  $("ov").querySelectorAll(".demo").forEach((el) => {
-    const frames = DEMOS[el.dataset.kind]; let k = -1;
+function playDemo(done) { // call once the card is on screen; it stops by itself when the card goes. done: every demo on the card has played through once
+  const all = [...$("ov").querySelectorAll(".demo")]; let open = all.length;
+  all.forEach((el) => {
+    const frames = DEMOS[el.dataset.kind]; let k = -1, once = false;
     const step = () => {
       if (!el.isConnected || $("ov").hidden) return;
       k = (k + 1) % frames.length; el.firstChild.innerHTML = demoFrame(el.dataset.kind, frames[k][0]);
       if (frames[k][1]) el.lastChild.textContent = frames[k][1];
-      if (!RM) setTimeout(step, frames[k][1] ? 2300 : 1000);
+      const fin = () => { if (k === frames.length - 1 && !once) { once = true; if (!--open && done) done(); } };
+      if (RM) fin(); else setTimeout(() => { fin(); step(); }, demoMs(frames[k]));
     };
     if (RM) { el.classList.add("manual"); el.onclick = step; } // no motion wanted: the player taps through the steps
     step();
@@ -707,6 +710,19 @@ function firstOf(t) {
   if (!FIRST) { FIRST = {}; for (let m = 0; m < 100; m++) { const L = Core.levelDef(m); for (const g of L.goals) FIRST[g.type] ??= m; if (L.rise) FIRST.rise ??= m; } }
   return FIRST[t];
 }
+// A new goal or obstacle that has an animation is shown moving as its level opens, once on this device: nobody opens the "?" card.
+// Level 1's is left to the coach, who teaches it on the board.
+const unseen = (L) => (L.n > 0 ? L.goals.map((g) => g.type).filter((t) => DEMOS[t] && firstOf(t) === L.n && !(prefs.shown || {})[t]) : []);
+function newRule() { // the level is open behind the card; Anladım wakes when the animation has played through
+  const L = G.L, kinds = unseen(L); if (!kinds.length) return;
+  busy = true;
+  card(`<div class="lvlhead"><span class="badge plain">${Core.OBST[kinds[0]] ? "Yeni engel" : "Yeni hedef"}</span><h2>${kinds.map((t) => goalOf(t).name).join(" · ")}</h2></div>
+    ${kinds.map((t) => demoHTML(t, " big")).join("")}<i class="watch" style="--t:${Math.max(...kinds.map((t) => DEMOS[t].reduce((s, f) => s + demoMs(f), 0)))}ms"></i>
+    <button class="b3 xl green" id="n-go" disabled>İzle…</button>`, THEMES[L.world]);
+  const go = $("n-go");
+  go.onclick = () => { prefs.shown = { ...prefs.shown, ...Object.fromEntries(kinds.map((t) => [t, 1])) }; store.set("sw4:prefs", prefs); closeCard(); busy = false; lastTick = performance.now(); };
+  playDemo(() => { go.disabled = false; go.textContent = "Anladım"; });
+}
 // What the three stars are for, in one line: finishing, moves to spare, the time. A bonus level's stars are score steps.
 const starRule = (L) => (L.joker ? [0.4, 0.7, 1].map((f, i) => `${"★".repeat(i + 1)} ${Math.round(L.goals[0].need * f)}`).join(" · ") + " puan"
   : `★ bitir · ★ ${L.spare} hamle artır · ★ ${mmss(Meta.parTime(L.moves, prefs.mode === "renk"))} içinde`);
@@ -714,14 +730,14 @@ function intro(n) { // short on purpose: the goals and Başla. A rule is explain
   const L = Core.levelDef(n), theme = L.joker ? JOKER_THEME : THEMES[L.world], rec = prefs.mode === "klasik" && recordOf(n), newWorld = n % 10 === 0 && n > 0, ws = L.joker ? 0 : Math.min(Meta.STREAK.length, meta().ws || 0);
   const fresh = (t) => firstOf(t) === n, got = profile.stars[n] || 0;
   card(`<div class="lvlhead">${L.joker ? `<span class="badge">Joker bölümü</span>` : newWorld ? `<span class="badge plain">Yeni dünya · yeni engel</span>` : L.boss ? `<span class="badge boss">Patron bölümü</span>` : ""}<h2>Bölüm ${n + 1}</h2><p>${L.joker ? "Bol joker ve altın harf, ekstra hediye" : `${L.biome} dünyası`} · ${L.moves} hamle</p></div>
-    ${goalRows(L, null, (t) => fresh(t) && !DEMOS[t])}${L.goals.map((g) => (fresh(g.type) ? demoHTML(g.type) : "")).join("")}${floorLine(L, !fresh("rise"))}
+    ${goalRows(L, null, (t) => fresh(t) && !DEMOS[t])}${L.goals.map((g) => (fresh(g.type) && !unseen(L).includes(g.type) ? demoHTML(g.type) : "")).join("")}${floorLine(L, !fresh("rise"))}
     <p class="starrule">${starRule(L)}</p>
     ${got ? `<div class="stars">${[1, 2, 3].map((k) => star(k <= got, 34)).join("")}</div>` : ""}
     ${rec ? `<button class="reclink" id="i-top" aria-label="Bu bölümün ilk 10'u">${CUP}${rec.me ? `Rekor sende: ${rec.score} puan` : `Rekor: ${esc(rec.name)} · ${rec.score} puan`} ›</button>` : ""}
     ${ws ? `<p class="wsline">${svgIcon(ICONS.flame)}Galibiyet serisi ×${ws}: ${["joker", "joker ve altın harf", "joker, altın ve bomba harfi"][ws - 1]} ile başlıyorsun</p>` : ""}
     <button class="b3 xl green" id="i-go">Başla</button><button class="b3 ghost" id="i-back">Vazgeç</button>`, theme);
   if (rec) $("i-top").onclick = () => levelTop(n);
-  $("i-go").onclick = () => (prefs.tut ? startLevel(n) : howTo(() => startLevel(n))); $("i-back").onclick = closeCard; playDemo();
+  $("i-go").onclick = () => startLevel(n); $("i-back").onclick = closeCard; playDemo();
 }
 const mmss = (s) => `${Math.floor(s / 60)}:${pad(Math.floor(s) % 60)}`;
 function levelTop(n) { // a level's first ten: stars, then the time of a full Klasik finish, then the score
@@ -732,7 +748,7 @@ function levelTop(n) { // a level's first ten: stars, then the time of a full Kl
     <button class="b3 ghost" id="t-back">Geri</button>`);
   $("t-back").onclick = () => intro(n);
 }
-// ---- how to play: four short pictured steps instead of a page of rules; shown once before the first level ----
+// ---- how to play: four short pictured steps instead of a page of rules; behind "Nasıl oynanır" (a new player is taught by the coach instead) ----
 const tutArt = (body) => `<svg class="tutart" viewBox="0 0 120 84" aria-hidden="true">${body}</svg>`;
 const TUT_PATH = [[0, 0], [0, 1], [1, 1], [2, 1]], TUT_WORD = "KEDİ"; // the word KEDİ, swiped as a hook shape
 function tutSteps(hues) {
@@ -766,7 +782,6 @@ function howTo(done, hues = prefs.mode === "renk") {
     $("h-next").onclick = () => (last ? finish() : page(k + 1));
     if (k) $("h-prev").onclick = () => page(k - 1); else $("h-skip").onclick = finish;
   };
-  if (!prefs.tut) { prefs.tut = true; store.set("sw4:prefs", prefs); }
   page(0);
 }
 function helpCard(L) { // in a level: just this level's goals; the rules are one tap further
@@ -791,7 +806,50 @@ function startLevel(n) {
   abandon();
   G = baseState(Core.levelDef(n), Math.random, "level", prefs.mode === "renk"); G.rec = recordOf(n); G.easy = prefs.mode === "rahat"; G.casual = prefs.mode !== "klasik"; G.timed = !G.L.joker; G.clock = 0; // every level but a bonus one is timed: the clock never ends a level, it decides the time star; in Klasik seconds under the time are also points and the time ranks the level
   if (!G.L.joker) streakTiles(G.grid, Math.min(Meta.STREAK.length, meta().ws || 0));
+  G.coach = !prefs.tut && !n ? 1 : 0;
   openScreen();
+  if (G.coach) setTimeout(coach, RM ? 0 : 900); else newRule(); // once the letters have rained in
+}
+// ---- coach: a new player's first level is played with a guide, not read about ----
+// A hand shows the next thing to do on the real screen (trace these letters, drag the block there); the half of the screen that is not needed
+// dims and carries one line of why. The coach follows the bot's best move, steps on when the player does the thing and leaves after the first clear.
+// G.coach: 1 nothing placed yet, 2 a block is on the board, 3 something cleared (say so and leave), 0 off. prefs.tut: the coach is done on this device.
+let fingerAnim = null, aimCells = [];
+const fingerOff = () => { fingerAnim?.cancel(); fingerAnim = null; $("finger").hidden = true; };
+function coachOff() { fingerOff(); $("coachtip").hidden = true; delete $("app").dataset.coach; aimCells.forEach((i) => cellEls[i]?.classList.remove("aim")); aimCells = []; }
+function fingerShow(pts) { // the hand travels these screen points, again and again
+  const f = $("finger"), tr = ([x, y], s = 1) => `translate(${x}px,${y}px) scale(${s})`, n = pts.length - 1; f.hidden = false; f.style.transform = tr(pts[0]);
+  if (!RM) fingerAnim = f.animate([{ transform: tr(pts[0], 1.3), opacity: 0 }, { transform: tr(pts[0]), opacity: 1, offset: 0.15 }, ...pts.slice(1).map((p, i) => ({ transform: tr(p), opacity: 1, offset: 0.15 + (0.6 * (i + 1)) / n })),
+    { transform: tr(pts[n]), opacity: 1, offset: 0.85 }, { transform: tr(pts[n], 1.3), opacity: 0 }], { duration: 1100 + 380 * n, iterations: Infinity });
+}
+function coach() {
+  if (!G || !G.coach) return;
+  coachOff();
+  if (busy || swiping || drag || $("app").hidden || goalsDone()) return;
+  if (G.coach === 3) { // the first clear: the loop has been done once by hand; name what happened and leave
+    G.coach = 0; prefs.tut = true; store.set("sw4:prefs", prefs); hintPath = []; markHint(); busy = true;
+    card(`<h2>İşte bu!</h2><p>Dolan satır, sütun ya da 3×3 kutu patlar. Puan da kırılan kütükler de oradan gelir.</p>${goalRows(G.L, G.left, () => false)}<p>Hamlen bitmeden hedefi tamamla. Artık sıra sende.</p><button class="b3 xl green" id="c-ok">Devam</button>`);
+    $("c-ok").onclick = () => { closeCard(); busy = false; lastTick = performance.now(); afterTurn(); };
+    return;
+  }
+  const open = Object.fromEntries(Object.entries(G.left).filter(([, v]) => v > 0)), k = G.hand.findIndex((p) => Core.fits(G.board, p));
+  let pts, text;
+  if (k >= 0) { // a block waits in the hand: show where it goes
+    const p = G.hand[k], at = Core.bestSpot(G.board, p, open), cs = p.cells.map(([a, b]) => (at.r + a) * B + at.c + b).map((i) => (cellEls[i].classList.add("aim"), aimCells.push(i), centerOf(cellEls[i])));
+    pts = [centerOf($("hand").children[k]), [0, 1].map((d) => (Math.min(...cs.map((c) => c[d])) + Math.max(...cs.map((c) => c[d]))) / 2)]; // a block is held by its middle: aim at the middle of where it goes
+    text = Core.place(G.board, p, at.r, at.c, 0).lines ? "Bu blok bir sırayı tamamlıyor. Yeşil yere bırak: patlasın!" : G.coach === 1 ? "Kelimen blok oldu. Bloğu tut, tahtadaki yeşil yere sürükle." : "Bloğu yeşil yere koy. Bir satır, sütun ya da kutu dolunca patlar.";
+  } else {
+    const easy = (g) => [...finder()(g)].filter(([w, p]) => w.length <= 4 && p.every((i) => Core.kindOf(g[i]) !== "joker")); // a first word should be short and spelled by its own letters
+    const h = G.hand.length < 3 && G.moves > 0 && (Core.bestMove(G.grid, G.board, open, easy) || Core.bestMove(G.grid, G.board, open, finder())); if (!h) return;
+    hintPath = h.path; markHint();
+    const r = $("gridwrap").getBoundingClientRect(), g = geo();
+    pts = h.path.map((i) => { const [x, y] = pos(i, g); return [r.left + x + g.sx / 2, r.top + y + g.size / 2]; });
+    text = G.hues ? (G.coach === 1 ? "Parmağını parlayan taşların üzerinden kaydır." : "Bir zincir daha: tahtada bir sırayı doldur.")
+      : `${G.coach === 1 ? "Parmağını parlayan harflerin üzerinden sırayla kaydır" : "Bir kelime daha yaz, tahtada bir sırayı doldur"}: <b>${up(h.word)}</b>`;
+  }
+  const zone = k >= 0 ? "drop" : "swipe", z = $(zone === "drop" ? "gridwrap" : "board").getBoundingClientRect(), tip = $("coachtip");
+  $("app").dataset.coach = zone; tip.innerHTML = `<p>${text}</p>`; tip.hidden = false; Object.assign(tip.style, { left: z.left + "px", top: z.top + "px", width: z.width + "px", height: z.height + "px" });
+  fingerShow(pts);
 }
 // A duel is two minutes on an empty board. "daily": everyone gets the day's letters. "send": I play first and my run becomes a challenge for the player `arg`.
 // "answer": I play the letters of the challenge record `arg` against the recording of the challenger's run.
@@ -808,7 +866,7 @@ function startDuel(kind = "daily", arg) {
   setTimeout(() => { if (G && G.duel && G.duel.seed === seed && !G.running) { G.running = true; openScreen(); } }, RM ? 700 : 1900);
 }
 function openScreen() {
-  closeCard(); show("game", G.L.world); path = []; hintPath = [];
+  closeCard(); show("game", G.L.world); path = []; hintPath = []; coachOff();
   const theme = G.mode === "duel" ? DUEL_THEME : G.L.joker ? JOKER_THEME : THEMES[G.L.world];
   paintScene($("gamebg"), G.L.world);
   $("field").style.setProperty("--c1", theme[0]); $("field").style.setProperty("--c2", theme[1]);
@@ -842,7 +900,7 @@ function makeRival() {
 let lastTick = performance.now();
 setInterval(() => {
   const t = performance.now(), dt = (t - lastTick) / 1000; lastTick = t;
-  if (G && G.timed && !G.ended && !busy && !$("app").hidden) { const was = Math.floor(G.clock); G.clock += dt; if (Math.floor(G.clock) !== was) renderTop(); } // stands still while a card or an animation holds the game
+  if (G && G.timed && !G.ended && !busy && !G.coach && !$("app").hidden) { const was = Math.floor(G.clock); G.clock += dt; if (Math.floor(G.clock) !== was) renderTop(); } // stands still while a card or an animation holds the game
   if (!G || !G.running || busy) return;
   G.elapsed = (G.elapsed || 0) + dt; G.timeLeft = Math.max(0, G.timeLeft - dt); renderTop(); renderGoals();
   const s = Math.ceil(G.timeLeft); if (s < G.tickAt && s > 0) { G.tickAt = s; snd.play("duelTick", s); }
@@ -1045,7 +1103,7 @@ $("gridwrap").addEventListener("pointerdown", (e) => {
   if (G.hand.length >= 3) { say("Elin dolu. Önce bir blok yerleştir.", "msg"); bump($("hand")); return; }
   if (G.mode === "level" && G.moves <= 0) { say("Hamle kalmadı. Elindeki blokları yerleştir.", "msg"); return; }
   const i = tileAt(e.clientX, e.clientY); if (i === null) return;
-  e.preventDefault(); swiping = true; path = [i]; lastPt = [e.clientX, e.clientY]; hintPath = []; markHint(); showPath(); snd.play("letter", 0);
+  e.preventDefault(); swiping = true; path = [i]; lastPt = [e.clientX, e.clientY]; fingerOff(); if (!G.coach) { hintPath = []; markHint(); } showPath(); snd.play("letter", 0);
   try { $("gridwrap").setPointerCapture(e.pointerId); } catch {}
 });
 // Browsers report fast swipes as a few far-apart points; walking the straight line between them in small steps
@@ -1081,9 +1139,9 @@ function endSwipe() {
   if (!w) {
     say(G.hues ? "En az 3 taş birleştir" : p.length < 3 ? "Kelime en az 3 harf olmalı" : `${up(p)} listede yok`, "msg"); snd.play("wordBad");
     path.forEach((i) => { const t0 = tiles[i].el.style.transform; anim(tiles[i].el, [{ transform: t0 }, { transform: t0 + " translateX(-5px)" }, { transform: t0 + " translateX(5px)" }, { transform: t0 }], { duration: 260 }); });
-    path = []; markPath(); return;
+    path = []; markPath(); coach(); return;
   }
-  const used = path.slice(); path = []; drawTrace();
+  const used = path.slice(); path = []; drawTrace(); hintPath = []; markHint();
   const t = performance.now(); G.chain = t - G.lastWordAt < CHAIN_MS ? Math.min(5, G.chain + 1) : 1; G.lastWordAt = t;
   const piece = Core.makePiece(G.grid, used, G.chain); piece.color = G.colorTurn++ % COLORS.length; // the word's points ride on the block: they are paid on the board, as its cells are cleared
   const slotIdx = G.hand.length; G.hand.push(piece);
@@ -1109,7 +1167,7 @@ function startDrag(e, k) {
   // a block caught mid pop-in can measure 0 wide; then grab it by the middle
   const fx_ = mr.width > 4 ? Math.min(1, Math.max(0, (e.clientX - mr.left) / mr.width)) : 0.5, fy = mr.height > 4 ? Math.min(1, Math.max(0, (e.clientY - mr.top) / mr.height)) : 0.5;
   const el = blockEl(p, pitch - 2, "drag"); document.body.appendChild(el); slot.classList.add("lifted"); snd.play("pick");
-  drag = { k, p, el, pitch, fx: fx_, fy, at: null, slot };
+  drag = { k, p, el, pitch, fx: fx_, fy, at: null, slot }; fingerOff();
   anim(el, [{ transform: `scale(${Math.max(0.2, mr.width / (p.w * pitch))})` }, { transform: "scale(1)" }], { duration: 140, easing: "ease-out" });
   moveDrag(e);
 }
@@ -1126,6 +1184,7 @@ function moveDrag(e) {
 function dropBack() { // an invalid drop slides back to its slot
   const { el, slot } = drag, [sx, sy] = centerOf(slot), r = el.getBoundingClientRect(); drag = null; setGhost([]); setWill([]); snd.play("dropBack");
   anim(el, [{ transform: "translate(0,0) scale(1)", opacity: 1 }, { transform: `translate(${sx - r.left - r.width / 2}px,${sy - r.top - r.height / 2}px) scale(.4)`, opacity: 0.3 }], { duration: 220, easing: "ease-in" }).then(() => { el.remove(); slot.classList.remove("lifted"); });
+  coach();
 }
 function endDrag() {
   if (!drag.at) return dropBack();
@@ -1136,6 +1195,7 @@ function endDrag() {
 async function placeBlock(k, p, at) {
   busy = settling = true;
   const res = Core.place(G.board, p, at[0], at[1], p.color), placed = p.cells.map(([r, c]) => (at[0] + r) * B + at[1] + c);
+  if (G.coach) { coachOff(); G.coach = res.lines ? 3 : 2; }
   G.hand.splice(k, 1); renderHand(); snd.play("place"); buzz(8);
   placed.forEach((i, j) => { paintCell(i, { color: p.color, gem: p.gems.includes(j) }); anim(cellEls[i].firstChild, [{ transform: "scale(.3)" }, { transform: "scale(1.15)", offset: 0.6 }, { transform: "scale(1)" }], { duration: 260, delay: j * 30, easing: "ease-out" }); });
   addScore(p.cells.length);
@@ -1264,6 +1324,7 @@ const goalsDone = () => G.mode === "level" && Object.values(G.left).every((v) =>
 function anyWordFits() { for (const [, p] of finder()(G.grid)) if (Core.fits(G.board, Core.makePiece(G.grid, p))) return true; return false; }
 function afterTurn() {
   if (!G || busy || $("app").hidden) return;
+  coach(); if (busy) return; // the coach's last word is a card; closing it comes back here
   if (goalsDone()) { busy = true; return setTimeout(() => levelEnd(3, true), RM ? 0 : 900); }
   if (G.hand.some((p) => Core.fits(G.board, p))) return;
   if (G.mode === "level" && G.moves <= 0) return setTimeout(outOfMoves, 300);

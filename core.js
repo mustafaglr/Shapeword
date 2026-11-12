@@ -419,9 +419,9 @@
     return p;
   }
   // Hint/bot choice: the word and spot that move the open goals most, then clear the most
-  function bestMove(grid, board, open = {}, find = findWords) { // find: findWords, or findChains in the wordless mode
-    // Filling a row, column or box that holds a wanted obstacle (or runs right beside one: the splash) sets up a clear, the way a person
-    // would; the fuller that region already is, the more a cell in it is worth.
+  // Filling a row, column or box that holds a wanted obstacle (or runs right beside one: the splash) sets up a clear, the way a person
+  // would; the fuller that region already is, the more a cell in it is worth.
+  function worthOf(board, open) {
     const want = (v) => v && (v.ob ? open[v.ob] || (v.ob === "jenerator" && open.cekirdek) : v.gem && open.crystal), worth = new Array(B * B).fill(0);
     const fill = open.score || !Object.keys(open).length; // the score is the goal (a joker level, a duel): points come from clears, so every row, column and box is worth filling
     for (const reg of REGIONS) {
@@ -430,27 +430,33 @@
       const share = (direct ? 1 : 0.6) * (0.6 + reg.reduce((a, i) => a + (board[i] ? 1 : 0), 0) / 4);
       for (const i of reg) worth[i] += share;
     }
+    return { worth, fill };
+  }
+  // The best spot on the board for one block: a word's (len: the word's length) or one already in the hand
+  function bestSpot(board, piece, open = {}, len = piece.cells.length, w = worthOf(board, open)) {
     let best = null;
-    for (const [word, path] of find(grid)) {
-      const piece = makePiece(grid, path);
-      for (let r = 0; r <= B - piece.h; r++) for (let c = 0; c <= B - piece.w; c++) {
-        if (!canPlace(board, piece, r, c)) continue;
-        const res = place(board, piece, r, c, 0);
-        let score = res.lines * 20 + res.bombed.length + word.length - piece.cells.length * 0.5 - res.stings * 30
-          + (open.crystal ? res.gems.length * 40 + piece.gems.length * 10 : 0) + (open.long && word.length >= 5 ? 30 : 0) + (open.bomb && piece.bombIdx >= 0 ? 35 : 0);
-        if (fill) score += res.paid * 0.5 + piece.pts * 0.2;
-        for (const x of res.broken) score += open[x.ob] ? 40 : x.ob === "jenerator" && open.cekirdek ? 30 : 5;
-        score += res.cracked.length * (open.buz ? 15 : 2);
-        for (const a of res.acts) score -= a.type === "spread" ? 6 : a.type === "eat" ? 4 : 0;
-        for (const [dr, dc] of piece.cells) score += worth[(r + dr) * B + c + dc];
-        if (!best || score > best.score) best = { word, path, r, c, score };
-      }
+    for (let r = 0; r <= B - piece.h; r++) for (let c = 0; c <= B - piece.w; c++) {
+      if (!canPlace(board, piece, r, c)) continue;
+      const res = place(board, piece, r, c, 0);
+      let score = res.lines * 20 + res.bombed.length + len - piece.cells.length * 0.5 - res.stings * 30
+        + (open.crystal ? res.gems.length * 40 + piece.gems.length * 10 : 0) + (open.long && len >= 5 ? 30 : 0) + (open.bomb && piece.bombIdx >= 0 ? 35 : 0);
+      if (w.fill) score += res.paid * 0.5 + piece.pts * 0.2;
+      for (const x of res.broken) score += open[x.ob] ? 40 : x.ob === "jenerator" && open.cekirdek ? 30 : 5;
+      score += res.cracked.length * (open.buz ? 15 : 2);
+      for (const a of res.acts) score -= a.type === "spread" ? 6 : a.type === "eat" ? 4 : 0;
+      for (const [dr, dc] of piece.cells) score += w.worth[(r + dr) * B + c + dc];
+      if (!best || score > best.score) best = { r, c, score };
     }
+    return best;
+  }
+  function bestMove(grid, board, open = {}, find = findWords) { // find: findWords, or findChains in the wordless mode
+    const w = worthOf(board, open); let best = null;
+    for (const [word, path] of find(grid)) { const s = bestSpot(board, makePiece(grid, path), open, word.length, w); if (s && (!best || s.score > best.score)) best = { word, path, ...s }; }
     return best;
   }
 
   const api = { M, H, B, BOX, MIN_LEN, MAX_LEN, BASE_RATES, WORLDS, BIOMES, OBST, REGIONS, worldOf, isWord, resolveWord, letterOf, kindOf, findWords, adjacent, shapeOf, makePiece,
-    plantWord, resolveChain, findChains, collapse, freshGrid, shuffleGrid, ensureFor, rngFrom, levelDef, botMoves, isJoker, isBoss, rubble, riseRow, floorTurn, sinkStones, starsFor, starsWon, clearPoints, boardProgress, emptyBoard, newOb, canPlace, fits, place, bestMove };
+    plantWord, resolveChain, findChains, collapse, freshGrid, shuffleGrid, ensureFor, rngFrom, levelDef, botMoves, isJoker, isBoss, rubble, riseRow, floorTurn, sinkStones, starsFor, starsWon, clearPoints, boardProgress, emptyBoard, newOb, canPlace, fits, place, bestMove, bestSpot };
   api.setSize = (cols, rows = cols) => { M = cols; H = rows; api.M = cols; api.H = rows; };
   if (typeof module !== "undefined") module.exports = api; else root.Core = api;
 })(typeof window !== "undefined" ? window : globalThis);
