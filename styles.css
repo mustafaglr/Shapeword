@@ -63,7 +63,7 @@ main { position: relative; z-index: 1; max-width: 430px; margin: 0 auto; display
 .wordline { position: relative; min-height: 28px; display: flex; align-items: center; justify-content: center; font: 700 1.25rem var(--display); letter-spacing: .1em; text-transform: uppercase; text-align: center; color: #fff; text-shadow: 0 2px 3px rgba(0,0,0,.3); }
 .wordline.ok { color: #FFF4B8; text-shadow: 0 0 12px rgba(255,244,184,.8), 0 2px 3px rgba(0,0,0,.35); } .wordline.no { color: rgba(255,255,255,.6); }
 .wordline.msg { font: 600 .85rem var(--ui); letter-spacing: 0; text-transform: none; color: rgba(255,255,255,.92); }
-.gridwrap { position: relative; width: 100%; aspect-ratio: 1; max-height: calc(31vh * var(--fit, 1)); max-height: calc(31dvh * var(--fit, 1)); margin: 2px auto 0; touch-action: none; }
+.gridwrap { position: relative; width: 100%; aspect-ratio: 1; max-height: calc(27vh * var(--fit, 1)); max-height: calc(27dvh * var(--fit, 1)); margin: 2px auto 0; touch-action: none; }
 .trace { position: absolute; inset: 0; pointer-events: none; overflow: visible; z-index: 2; }
 .tile { position: absolute; left: 0; top: 0; border-radius: 999px; display: grid; place-items: center; z-index: 1; will-change: transform;
   background: radial-gradient(circle at 35% 28%, #FFFFFF 0 16%, #EEF0FA 42%, #C6CCE4 100%); color: #262150;
@@ -95,7 +95,7 @@ main { position: relative; z-index: 1; max-width: 430px; margin: 0 auto; display
 .mini i.bomb::after, .drag i.bomb::after { content: ""; position: absolute; inset: 22%; border-radius: 50%; background: #2B2240; box-shadow: 0 0 0 2px #FF5A4F; }
 .drag { position: fixed; pointer-events: none; z-index: 25; filter: drop-shadow(0 10px 12px rgba(0,0,0,.35)); }
 
-.board { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); grid-template-rows: repeat(9, minmax(0, 1fr)); aspect-ratio: 1; width: min(100%, calc(34vh * var(--fit, 1))); width: min(100%, calc(34dvh * var(--fit, 1))); margin: 0 auto; border-radius: 20px; padding: 5px; box-sizing: border-box; touch-action: none;
+.board { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); grid-template-rows: repeat(9, minmax(0, 1fr)); aspect-ratio: 1; width: min(100%, calc(39vh * var(--fit, 1))); width: min(100%, calc(39dvh * var(--fit, 1))); margin: 0 auto; border-radius: 20px; padding: 5px; box-sizing: border-box; touch-action: none;
   background: rgba(255,255,255,.9); box-shadow: inset 0 0 0 3px rgba(255,255,255,.6), 0 10px 24px rgba(0,0,0,.3); }
 .cell { aspect-ratio: 1; max-width: 100%; padding: 1.5px; box-sizing: border-box; }
 .board > .cell { aspect-ratio: auto; min-width: 0; min-height: 0; } /* the board is the square; Safari did not keep 81 square cells inside it */
@@ -106,6 +106,11 @@ main { position: relative; z-index: 1; max-width: 430px; margin: 0 auto; display
 .cell.gem > b::after, .mini i.gem::after, .drag i.gem::after { content: ""; position: absolute; inset: 10%; background: var(--gem) center/contain no-repeat; }
 .cell.ghost > b { outline: 2px dashed var(--blue); outline-offset: -2px; background: #C2D2FF; }
 .cell.suggest > b { box-shadow: inset 0 0 0 3px var(--green); }
+/* while a block is dragged: the rows, columns and boxes this drop would clear */
+#board .cell.will > b { box-shadow: inset 0 0 0 3px #FFC93C, 0 0 10px 2px rgba(255,201,60,.9); filter: brightness(1.25); animation: willpulse .7s ease-in-out infinite alternate; } /* #board: stone and block cells set their own shadow further down */
+#board .cell.will.ghost > b { outline-color: #F5A300; background: #FFE9A8; }
+@keyframes willpulse { to { filter: brightness(1.45); } }
+@media (prefers-reduced-motion: reduce) { #board .cell.will > b { animation: none; } }
 /* obstacles: an icon from scenes.js fills the cell; a few states sit on top */
 .cell.ob > b { box-shadow: none; transition: opacity .3s; }
 .cell.ob > b svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; }
@@ -282,7 +287,7 @@ main { position: relative; z-index: 1; max-width: 430px; margin: 0 auto; display
 .admin h3 { margin: 0; color: #B8801A; }
 .card .field-in { background: var(--well); }
 .share { width: 100%; box-sizing: border-box; font: .85rem ui-monospace, Menlo, monospace; color: var(--ink); background: var(--well); border: 0; border-radius: 12px; padding: 10px; resize: none; }
-@media (max-height: 780px) { .gridwrap { max-height: calc(30vh * var(--fit, 1)); max-height: calc(30dvh * var(--fit, 1)); } .board { width: min(100%, calc(32vh * var(--fit, 1))); width: min(100%, calc(32dvh * var(--fit, 1))); } }
+@media (max-height: 780px) { .gridwrap { max-height: calc(26vh * var(--fit, 1)); max-height: calc(26dvh * var(--fit, 1)); } .board { width: min(100%, calc(37vh * var(--fit, 1))); width: min(100%, calc(37dvh * var(--fit, 1))); } }
 @media (max-height: 700px) { body { padding-block: 4px 6px; } main { gap: 5px; } .field { padding: 6px 10px 8px; } .wordline { min-height: 24px; font-size: 1.05rem; } .booster { padding: 4px 4px 3px; } .hud { padding: 4px; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 /* tokens, tiers, chests, quests, challenges */
@@ -364,6 +369,9 @@ body.cb .tile.h4 { --h: #0072B2; --hd: #004B75; color: #fff; } body.cb .tile.h5 
 body.cb .tile.hue span { font-size: 1.6em; }
 body.cb .tile.hue.gold { box-shadow: 0 0 0 3px #14112B, 0 0 0 6px #FFE08A; } body.cb .tile.hue.crystal { box-shadow: 0 0 0 3px #fff, 0 0 0 6px #6D28D9; } body.cb .tile.hue.bomb { box-shadow: 0 0 0 3px #fff, 0 0 0 6px #D00000; }
 #gridwrap.sq .tile { border-radius: 9px; } /* Renk mod: small square tiles, nine across */
+/* Renk mod: six rows of small tiles need more height than five rows of letters, so the field keeps it and the board gives a little back */
+#gridwrap.sq { max-height: calc(30vh * var(--fit, 1)); max-height: calc(30dvh * var(--fit, 1)); } .board.sq { width: min(100%, calc(36vh * var(--fit, 1))); width: min(100%, calc(36dvh * var(--fit, 1))); }
+@media (max-height: 780px) { #gridwrap.sq { max-height: calc(30vh * var(--fit, 1)); max-height: calc(30dvh * var(--fit, 1)); } .board.sq { width: min(100%, calc(33vh * var(--fit, 1))); width: min(100%, calc(33dvh * var(--fit, 1))); } }
 /* How to play: four pictured steps */
 .tutpic { display: grid; place-items: center; padding: 12px; border-radius: 18px; background: var(--well); }
 .tutart { width: min(220px, 70vw); height: auto; overflow: visible; }

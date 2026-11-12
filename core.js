@@ -299,6 +299,24 @@
     for (let r = B - 1; r >= 0 && done < rows; r--) { let any = false; for (let c = 0; c < B; c++) if (out[r * B + c] && out[r * B + c].stone) { out[r * B + c] = null; any = true; } if (any) done++; }
     return out;
   }
+  // A part-filled start: stone fills `count` rows, columns or boxes but for a hole shaped like a short word (a run of 3-4 touching cells).
+  // The board then asks for a shape from the first move, and a block made to fit clears at once. Never completes a region, never covers an earlier hole.
+  function rubble(board, count, r) {
+    const keep = new Set(); let done = 0;
+    for (let t = 0; t < 80 && done < count; t++) {
+      const reg = REGIONS[Math.floor(r() * REGIONS.length)], free = reg.filter((i) => !board[i]);
+      if (free.length < 6) continue; // obstacles or an earlier fill already crowd it
+      const len = 3 + Math.floor(r() * 2), hole = [free[Math.floor(r() * free.length)]];
+      while (hole.length < len) { const opts = free.filter((i) => !hole.includes(i) && around(hole[hole.length - 1]).includes(i)); if (!opts.length) break; hole.push(opts[Math.floor(r() * opts.length)]); }
+      const fill = free.filter((i) => !hole.includes(i) && !keep.has(i)), next = board.slice();
+      for (const i of fill) next[i] = { color: -1, stone: true };
+      if (hole.length < 3 || fill.length < 4 || fullRegions(next).length) continue;
+      for (const i of fill) board[i] = next[i];
+      hole.forEach((i) => keep.add(i)); done++;
+    }
+    return board;
+  }
+  const rubbleOf = (n) => (n < 2 ? 0 : n < 10 ? 2 : n < 30 ? 3 : 4); // regions part-filled at the start; the first two levels keep a clean board
   const isBoss = (n) => n % 10 === 9; // a world's last level
   const riseOf = (n) => (n < 12 || isJoker(n) || n % 10 < 2 ? 0 : isBoss(n) || n >= 30 ? 2 : 3); // from level 13; never while a world introduces its obstacle
 
@@ -311,7 +329,7 @@
   const worldOf = (n) => Math.floor(n / 10) % WORLDS.length;
   // Move budgets for levels 1-100: the 75th percentile of the words a greedy bot needed (8 letter seeds per level, 0 = joker level).
   // Regenerate with `node test.js --calibrate` after changing level generation, an obstacle rule or the word list.
-  const MOVES = [8, 7, 7, 7, 7, 8, 0, 7, 7, 7, 7, 7, 8, 0, 7, 8, 7, 7, 7, 7, 8, 10, 7, 7, 7, 7, 7, 0, 9, 7, 9, 7, 8, 7, 0, 11, 7, 10, 7, 7, 7, 0, 8, 7, 11, 8, 13, 10, 0, 9, 7, 7, 10, 9, 7, 0, 14, 9, 11, 7, 7, 14, 0, 12, 10, 8, 10, 7, 12, 0, 7, 11, 10, 12, 12, 14, 0, 15, 12, 17, 18, 17, 12, 0, 15, 14, 13, 16, 10, 7, 7, 16, 9, 8, 13, 12, 8, 0, 7, 17];
+  const MOVES = [8, 7, 7, 10, 7, 9, 0, 7, 7, 7, 7, 7, 10, 0, 7, 7, 7, 7, 7, 7, 8, 7, 8, 7, 7, 7, 7, 0, 10, 7, 9, 7, 13, 9, 0, 11, 7, 8, 7, 7, 7, 0, 10, 7, 10, 7, 11, 9, 0, 7, 7, 7, 13, 7, 7, 0, 13, 13, 9, 7, 7, 15, 0, 12, 13, 8, 12, 8, 16, 0, 7, 11, 11, 10, 11, 13, 0, 13, 12, 10, 12, 13, 15, 0, 12, 13, 16, 17, 15, 7, 7, 15, 12, 7, 14, 11, 9, 0, 7, 20];
   const botMoves = (n) => MOVES[n % 100] || 20;
   const SIZE = { kutuk: [6, 10], akrep: [2, 4], yengec: [3, 6], lav: [4, 8], buz: [3, 6], hayalet: [2, 4], tomurcuk: [6, 10], dinamit: [3, 5], cekirdek: [2, 4], bosluk: [2, 4] }; // cells: [a world's early levels, cap]
   const obCount = (kind, n) => Math.min(SIZE[kind][1], SIZE[kind][0] + Math.floor((n % 10) / 3) + Math.floor(n / 100));
@@ -346,13 +364,14 @@
     [["kutuk", 8], ["long", 3]],     // 10: the world's boss
   ];
   const BOMB_FROM = 7; // no bomb letters before the level that teaches them
-  const SCORE_PER_WORD = 43; // median points per move on joker levels (placement + clears; the bot clears about three cells in four), measured with the bot
+  const SCORE_PER_WORD = 55; // median points per move on joker levels (placement + clears on the part-filled board; the bot clears six to eight regions), measured with the bot
   const isJoker = (n) => n >= 6 && n % 7 === 6 && n % 10 !== 0; // never on a world's first level: that one introduces the obstacle
   function levelDef(n) {
     const r = rngFrom("lvl:" + n), world = worldOf(n), ob = WORLDS[world].ob, biome = WORLDS[world].name, board = emptyBoard();
     if (isJoker(n)) { // bonus level: rich letters, one score goal, extra gifts
       const moves = 12 + Math.min(8, Math.floor(n / 20));
-      return { n, world, biome, joker: true, goals: [{ type: "score", need: Math.round((SCORE_PER_WORD * moves * 0.6) / 50) * 50 }], board, moves, plantRate: 0.6,
+      rubble(board, 5, r); // a bonus level is all about the board: five regions wait to be finished
+      return { n, world, biome, joker: true, goals: [{ type: "score", need: Math.round((SCORE_PER_WORD * moves * 0.75) / 50) * 50 }], board, moves, plantRate: 0.6,
         rates: { joker: 0.15, bomb: n < BOMB_FROM ? 0 : 0.07, gold: 0.15, crystal: 0 } };
     }
     let plan;
@@ -371,7 +390,8 @@
     }
     let start = board, risen = 0; // a boss level starts with two stone rows already in
     if (isBoss(n)) for (let k = 0; k < 2; k++) { const up = riseRow(start, k); if (up) { start = up; risen++; } }
-    const moves = Math.ceil(botMoves(n) * (n < 10 ? 1.7 : n < 30 ? 1.5 : 1.35)) + 2 * Math.floor(n / 100); // people plan less sharply than the bot, beginners least; later rounds carry more obstacles
+    rubble(start, rubbleOf(n), r);
+    const moves = Math.ceil(botMoves(n) * (n < 10 ? 1.6 : n < 30 ? 1.4 : 1.3)) + 2 * Math.floor(n / 100); // people plan less sharply than the bot, beginners least; later rounds carry more obstacles
     const types = goals.map((g) => g.type);
     return { n, world, biome, joker: false, boss: isBoss(n), rise, risen, goals, board: start, moves: moves + (isBoss(n) ? 3 : 0), plantRate: 0.5,
       rates: { ...BASE_RATES, crystal: types.includes("crystal") ? 0.15 : 0, bomb: types.includes("bomb") ? 0.09 : n < BOMB_FROM ? 0 : BASE_RATES.bomb } };
@@ -426,7 +446,7 @@
   }
 
   const api = { M, H, B, BOX, MIN_LEN, MAX_LEN, BASE_RATES, WORLDS, BIOMES, OBST, REGIONS, worldOf, isWord, resolveWord, letterOf, kindOf, findWords, adjacent, shapeOf, makePiece,
-    plantWord, resolveChain, findChains, collapse, freshGrid, shuffleGrid, ensureFor, rngFrom, levelDef, botMoves, isJoker, isBoss, riseRow, floorTurn, sinkStones, starsFor, clearPoints, boardProgress, emptyBoard, newOb, canPlace, fits, place, bestMove };
+    plantWord, resolveChain, findChains, collapse, freshGrid, shuffleGrid, ensureFor, rngFrom, levelDef, botMoves, isJoker, isBoss, rubble, riseRow, floorTurn, sinkStones, starsFor, clearPoints, boardProgress, emptyBoard, newOb, canPlace, fits, place, bestMove };
   api.setSize = (cols, rows = cols) => { M = cols; H = rows; api.M = cols; api.H = rows; };
   if (typeof module !== "undefined") module.exports = api; else root.Core = api;
 })(typeof window !== "undefined" ? window : globalThis);

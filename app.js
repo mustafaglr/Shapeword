@@ -89,7 +89,7 @@ for (const ev of ["pointerup", "touchend", "click", "keydown"]) addEventListener
 addEventListener("click", (e) => { if (e.target.closest && e.target.closest("button")) snd.play("tap"); }, true);
 
 const idOf = (name) => name.trim().replace(/\s+/g, " ").toLocaleLowerCase("tr");
-const blankProfile = (name) => ({ name, id: idOf(name), born: Date.now(), stars: {}, best: {}, duelBest: 0, inv: { karistir: 2, yenile: 1, ipucu: 2, joker: 1 }, updated: Date.now() }); // born: a full reset drops everyone made before it
+const blankProfile = (name) => ({ name, id: idOf(name), born: Date.now(), stars: {}, best: {}, duelBest: 0, inv: { karistir: 1, yenile: 1, ipucu: 1, joker: 1 }, updated: Date.now() }); // one of each booster to try; born: a full reset drops everyone made before it
 let profile = store.get("sw4:profile", null);
 const isAdmin = () => profile && profile.id === "admin"; // the hidden switch: play under the name "admin" and every level opens, boosters are free
 const inv = () => profile.inv;
@@ -102,6 +102,7 @@ function meta(p = profile) {
   if (!p.meta || typeof p.meta !== "object") // an older save starts one chest short of what its stars and worlds would give: a first chest to open, not a pile
     p.meta = { tokens: Meta.PAY.start, cups: 0, ws: 0, starChests: Math.max(0, Math.floor(totalStars(p) / Meta.STAR_STEP) - 1), worldChests: Math.max(0, Math.floor(nextLevel(p) / 10) - 1), tierGot: 0, freeAt: 0, seen: {} };
   const m = p.meta;
+  m.starChests = Math.min(m.starChests || 0, Math.floor(totalStars(p) / Meta.STAR_STEP)); // the star chest's step grew: a save from before must not wait for chests it "already opened"
   if (!m.q || m.q.date !== TODAY) m.q = { date: TODAY, p: {}, got: {}, chest: false };
   return m;
 }
@@ -500,7 +501,7 @@ function renderLanding() {
   if (st > (prefs.stage || 0)) { prefs.stage = st; store.set("sw4:prefs", prefs); toast(st === 1 ? "Yeni: sandıklar, görevler ve harita açıldı" : "Yeni: düello, sıralama ve mağaza açıldı"); } // said once, when the stage opens
 }
 // ---- daily reward: once a day, a 7-day cycle; a missed day starts the cycle again ----
-const DAILY = [["ipucu"], ["karistir"], ["yenile"], ["joker"], ["ipucu", "karistir"], ["yenile", "joker"], ["karistir", "yenile", "ipucu", "joker"]];
+const DAILY = [["ipucu"], ["karistir"], ["yenile"], ["joker"], ["ipucu"], ["karistir"], ["yenile", "joker"]]; // one booster a day, two on the seventh
 function dailyReward() {
   if (!profile || $("landing").hidden || !$("ov").hidden) return;
   const st = profile.streak || { last: "", n: 0 }; if (st.last === TODAY) return;
@@ -508,7 +509,7 @@ function dailyReward() {
   card(`<span class="badge">Günlük ödül</span><h2>${n}. gün</h2>
     <div class="days">${DAILY.map((_, i) => `<i class="${i < day ? "got" : i === day ? "now" : ""}">${i + 1}</i>`).join("")}</div>
     <div class="gifts">${giftTiles(gifts, 0.2, 0.15)}</div>
-    <p>Her gün gir, ödül büyüsün. 7. gün dört güçlendirici birden gelir.</p><button class="b3 xl" id="d-take">Al</button>`);
+    <p>Her gün bir güçlendirici; 7. gün iki tane gelir.</p><button class="b3 xl" id="d-take">Al</button>`);
   $("d-take").onclick = () => { gifts.forEach((k) => inv()[k]++); profile.streak = { last: TODAY, n }; saveProfile(); snd.play("gift"); confetti(); closeCard(); renderLanding(); };
 }
 // ---- ranking: this week's league, today's duel, all-time stars ----
@@ -787,7 +788,7 @@ function startLevel(n) {
 // "answer": I play the letters of the challenge record `arg` against the recording of the challenger's run.
 function startDuel(kind = "daily", arg) {
   const seed = kind === "daily" ? TODAY + ":duel" : kind === "send" ? `vs:${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}` : arg.seed;
-  G = baseState({ n: -1, world: 5, biome: "Düello", goals: [], board: Core.emptyBoard(), moves: Infinity, plantRate: 0.5, rates: Core.BASE_RATES }, Core.rngFrom(seed), "duel");
+  G = baseState({ n: -1, world: 5, biome: "Düello", goals: [], board: Core.rubble(Core.emptyBoard(), 4, Core.rngFrom(seed + ":tas")), moves: Infinity, plantRate: 0.5, rates: Core.BASE_RATES }, Core.rngFrom(seed), "duel");
   G.duel = { kind, seed, arg }; G.run = []; G.elapsed = 0;
   G.rival = kind === "daily" ? makeRival() : kind === "answer" ? ghostRival(arg.an, arg.sa, arg.ra, playerOf(arg.a, arg.an)) : { name: arg.name, target: 0, who: arg, later: true, at: () => 0 };
   busy = true;
@@ -821,7 +822,7 @@ function fitGame() { // a short screen (Safari's bars, a small phone): shrink th
 // shortcut: without a recording (an older save) the real rival's curve is made up and only the final score is theirs.
 const ghostRival = (name, target, run, who) => { const tg = Math.max(0, Math.round(+target) || 0); return { name, target: tg, real: true, who, at: (t) => (t >= DUEL_SECONDS ? tg : Math.min(tg, Meta.ghostAt(run, t))) }; };
 function makeRival() {
-  const r = Core.rngFrom(TODAY + ":rakip"), fake = NAMES[Math.floor(r() * NAMES.length)], fakeTarget = 600 + Math.floor(r() * 520);
+  const r = Core.rngFrom(TODAY + ":rakip"), fake = NAMES[Math.floor(r() * NAMES.length)], fakeTarget = 700 + Math.floor(r() * 600);
   const real = others().filter((p) => p.duel && p.duel.date === TODAY && p.duel.score > 0).sort((a, b) => b.duel.score - a.duel.score)[0];
   const run = real ? Meta.cleanRun(real.duel.run) : [];
   if (run.length > 2) return ghostRival(real.name, real.duel.score, run, real);
@@ -847,7 +848,7 @@ function addScore(p) { // every point also counts down a joker level's score goa
 }
 
 // ===================== letter field =====================
-function geo() { const el = $("gridwrap"); el.classList.toggle("sq", !!(G && G.hues)); const w = el.clientWidth, h = el.clientHeight, gap = Math.max(6, h * 0.03), size = (h - gap * (R - 1)) / R, sx = (w - gap * (M - 1)) / M; return { w, h, gap, size, sx, pitch: size + gap, px: sx + gap }; }
+function geo() { const el = $("gridwrap"), hue = !!(G && G.hues); el.classList.toggle("sq", hue); $("board").classList.toggle("sq", hue); const w = el.clientWidth, h = el.clientHeight, gap = Math.max(6, h * 0.03), size = (h - gap * (R - 1)) / R, sx = (w - gap * (M - 1)) / M; return { w, h, gap, size, sx, pitch: size + gap, px: sx + gap }; }
 const pos = (i, g) => [(i % M) * g.px, ((i / M) | 0) * g.pitch];
 const SHAPES = "●▲■◆★";
 function setTile(el, t) { const ch = Core.letterOf(t), hue = ch >= "1" && ch <= "5"; el.className = "tile " + Core.kindOf(t) + (hue ? " hue h" + ch : ""); el.firstChild.textContent = hue ? SHAPES[ch - 1] : ch; }
@@ -946,6 +947,8 @@ function paintCell(i, v = G.board[i]) {
     b.innerHTML = obIcon(v.ob === "buz" && v.hp === 1 ? "buzCrack" : v.ob) + (v.t ? `<em${v.t <= 2 ? ' class="hot"' : ""}>${v.t}</em>` : "");
   } else { d.className = `cell${bx}${v ? " on" : ""}${v && v.stone ? " stone" : ""}`; delete d.dataset.ob; b.innerHTML = ""; b.style.background = v ? (v.stone ? STONE : COLORS[v.color]) : ""; if (v && v.gem) d.classList.add("gem"); }
 }
+let willCells = [];
+function setWill(list) { willCells.forEach((i) => cellEls[i].classList.remove("will")); willCells = list; list.forEach((i) => cellEls[i].classList.add("will")); }
 function setGhost(list, cls = "ghost") { ghostCells.forEach((i) => cellEls[i].classList.remove("ghost", "suggest")); ghostCells = list; list.forEach((i) => cellEls[i].classList.add(cls)); }
 
 // ===================== hand, goals, top bar =====================
@@ -1106,16 +1109,18 @@ function moveDrag(e) {
   const left = e.clientX - fx_ * w, top = e.clientY - fy * h; // the point you grabbed stays under your finger
   el.style.left = left + "px"; el.style.top = top + "px"; el.style.transformOrigin = `${fx_ * 100}% ${fy * 100}%`;
   const { r } = boardGeo(), r0 = Math.round((top - r.top - 5) / pitch), c0 = Math.round((left - r.left - 5) / pitch);
-  drag.at = Core.canPlace(G.board, p, r0, c0) ? [r0, c0] : null;
-  setGhost(drag.at ? p.cells.map(([a, b]) => (r0 + a) * B + c0 + b) : []);
+  const at = Core.canPlace(G.board, p, r0, c0) ? [r0, c0] : null, key = at ? at.join() : "";
+  drag.at = at; if (key === drag.key) return; drag.key = key;
+  setGhost(at ? p.cells.map(([a, b]) => (r0 + a) * B + c0 + b) : []);
+  setWill(at ? Core.place(G.board, p, r0, c0, 0).regions.flat() : []); // the rows, columns and boxes this drop would clear light up before you let go
 }
 function dropBack() { // an invalid drop slides back to its slot
-  const { el, slot } = drag, [sx, sy] = centerOf(slot), r = el.getBoundingClientRect(); drag = null; setGhost([]); snd.play("dropBack");
+  const { el, slot } = drag, [sx, sy] = centerOf(slot), r = el.getBoundingClientRect(); drag = null; setGhost([]); setWill([]); snd.play("dropBack");
   anim(el, [{ transform: "translate(0,0) scale(1)", opacity: 1 }, { transform: `translate(${sx - r.left - r.width / 2}px,${sy - r.top - r.height / 2}px) scale(.4)`, opacity: 0.3 }], { duration: 220, easing: "ease-in" }).then(() => { el.remove(); slot.classList.remove("lifted"); });
 }
 function endDrag() {
   if (!drag.at) return dropBack();
-  const { k, p, at, el } = drag; drag = null; el.remove(); setGhost([]);
+  const { k, p, at, el } = drag; drag = null; el.remove(); setGhost([]); setWill([]);
   placeBlock(k, p, at);
 }
 // One turn on the board, in the order core.js resolved it: the block lands, clears ripple out, the obstacles move, late clears, repaint.
@@ -1156,8 +1161,7 @@ function cheer(res, p, at) { // everything you hear and feel when a placement cl
   if (res.blocked.some((i) => G.board[i] && G.board[i].ob === "cekirdek")) snd.ob("cekirdek", "hit");
   if (res.lines >= 3) bigText("MÜTHİŞ!"); else if (res.lines && G.combo >= 2) bigText(`KOMBO x${G.combo}`); else if (res.lines === 2) bigText("İKİ BİRDEN!");
   if (res.lines) {
-    if (G.combo === 3) gift("karistir", "Kombo x3"); if (G.combo === 5) gift("ipucu", "Kombo x5"); if (G.combo === 7) gift("joker", "Kombo x7");
-    if (res.lines >= 3) gift("yenile", `${res.lines} bölge birden`);
+    if (G.combo === 5) gift("ipucu", "Kombo x5"); // the one booster a level can give: five clears in a row
   }
 }
 function ripple(cells, res, origin) { // the clear spreads out from where the block landed
@@ -1285,14 +1289,13 @@ function noRoom() {
   if ($("o-end")) $("o-end").onclick = finishDuel; if ($("o-take")) $("o-take").onclick = () => levelEnd(s, false); if ($("o-retry")) $("o-retry").onclick = () => startLevel(G.L.n);
   $("o-map").onclick = G.mode === "duel" ? landing : openMap;
 }
-const GIFTS_PER_STAR = { 1: ["karistir"], 2: ["ipucu"], 3: ["yenile", "joker"] };
 function levelEnd(stars, finishedAll) {
   busy = true;
   const par = Meta.parTime(G.L.moves), took = Math.round(G.clock || 0), fast = G.timed && finishedAll ? Math.max(0, par - took) : 0; // Klasik: every second under the time is a point; stars only count goals
   if (G.timed && finishedAll) { profile.time ||= {}; profile.time[G.L.n] = Math.min(profile.time[G.L.n] || Infinity, took); }
   const L = G.L, bonus = (finishedAll ? G.moves * 20 : 0) + fast, final = G.score + bonus, prev = profile.stars[L.n] || 0, prevBest = profile.best[L.n] || 0, rec = recordOf(L.n);
-  const gifts = []; for (let s = prev + 1; s <= stars; s++) gifts.push(...GIFTS_PER_STAR[s]); // only newly earned stars pay out
-  if (L.joker && !prev) gifts.push(...["karistir", "yenile", "ipucu", "joker"].sort(() => Math.random() - 0.5).slice(0, 2)); // joker levels give two extra gifts the first time
+  const any = () => Meta.BOOSTER_KEYS[Math.floor(Math.random() * Meta.BOOSTER_KEYS.length)], gifts = []; // only bonus (joker) levels hand out boosters: one the first time it is passed, one more for its third star
+  if (L.joker) { if (!prev) gifts.push(any()); if (stars === 3 && prev < 3) gifts.push(any()); }
   gifts.forEach((k) => inv()[k]++);
   const gain = G.casual ? 0 : Math.max(0, final - prevBest), beat = !G.casual && rec && !rec.me && final > rec.score; addWeek(gain);
   const m = meta(), tok = stars > prev ? (stars - prev) * Meta.PAY.star : Meta.PAY.replay; // new stars pay; a replay pays a little
@@ -1307,7 +1310,7 @@ function levelEnd(stars, finishedAll) {
     ${G.timed && finishedAll ? `<p class="${fast ? "rec" : "modenote"}">Süre ${mmss(took)} · ${fast ? `süre bonusu +${fast}` : `süre bonusu yok (sınır ${mmss(par)})`}</p>` : ""}
     ${G.casual ? (homeStage() >= 2 ? `<p class="modenote">Rekor ve lig puanı için Ayarlar'dan Klasik modu seç.</p>` : "") : recLine ? `<p class="rec">${recLine}</p>` : ""}${gain ? `<p>Haftalık lig: +${gain} puan</p>` : ""}
     <p class="earn"><span>${COIN}+${tok} jeton</span>${m.ws >= 2 ? `<span><span class="fl">${svgIcon(ICONS.flame)}</span>Galibiyet serisi ×${m.ws}</span>` : ""}${homeStage() ? `<span>${chestLine}</span>` : ""}</p>
-    ${gifts.length ? `<h3>Hediyeler</h3><div class="gifts">${giftTiles(gifts, 0.9, 0.18)}</div>` : `<p>Bu yıldızların hediyelerini almıştın. Daha çok yıldız, daha çok hediye.</p>`}
+    ${gifts.length ? `<h3>Hediyeler</h3><div class="gifts">${giftTiles(gifts, 0.9, 0.18)}</div>` : ""}
     <button class="b3 xl green" id="o-next">Sonraki bölüm</button><div class="row2"><button class="b3 ghost" id="o-again">Tekrar</button><button class="b3 ghost" id="o-map">Harita</button></div>`, L.joker ? JOKER_THEME : THEMES[L.world]);
   const sc = $("o-score"), t0 = performance.now(); // count the move bonus up
   (function count(t) { const f = Math.min(1, (t - t0) / 900); sc.textContent = Math.round(G.score + bonus * f); if (f < 1 && !RM) requestAnimationFrame(count); else sc.textContent = final; })(t0);

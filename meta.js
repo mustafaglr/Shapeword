@@ -1,4 +1,5 @@
 // Shapeword meta rules: tokens, trophies and tiers, daily quests, chests, duel ghosts. Tables and pure functions; the page keeps the state.
+// The economy is lean on purpose: a level pays 9 tokens at most and no boosters, so a booster (50 tokens) or five more moves (60) is worth an ad.
 // `node test.js` covers them. Every number a designer may want to tune is in this file.
 (function (root) {
   "use strict";
@@ -9,14 +10,14 @@
   const cupsAfter = (cups, diff) => (diff > 0 ? cups + CUP.win : diff === 0 ? cups + CUP.draw : Math.max(TIERS[tierOf(cups)][1], cups - CUP.loss));
 
   // ---- tokens ----
-  const PAY = { start: 50, star: 10, replay: 5, duelWin: 30, duelPlay: 10 };  // a new player; each newly earned star; a win that earns no new star; a duel won; a duel played
+  const PAY = { start: 50, star: 3, replay: 1, duelWin: 10, duelPlay: 3 };     // a new player; each newly earned star; a win that earns no new star; a duel won; a duel played
   const COST = { moves: 60, rescue: 40, booster: 50 };                        // +5 moves; clear the hand or deal new letters when nothing fits; one booster
 
   // ---- daily quests: three a day, the same three for everyone (the caller seeds rnd with the date) ----
   const QUESTS = { // key: [text, target, tokens]
-    words: ["{n} kelime yaz", 15, 25], long: ["5+ harfli {n} kelime yaz", 4, 30], lines: ["{n} satır, sütun ya da kutu patlat", 8, 25],
-    win: ["{n} bölüm geç", 2, 30], three: ["Bir bölümü 3 yıldızla bitir", 1, 30], duel: ["Bir düello oyna", 1, 25],
-    combo: ["{n} kez kombo yap", 2, 30], breakOb: ["{n} engel kır", 6, 25], gold: ["{n} altın harf kullan", 2, 25],
+    words: ["{n} kelime yaz", 15, 10], long: ["5+ harfli {n} kelime yaz", 4, 12], lines: ["{n} satır, sütun ya da kutu patlat", 8, 10],
+    win: ["{n} bölüm geç", 2, 12], three: ["Bir bölümü 3 yıldızla bitir", 1, 12], duel: ["Bir düello oyna", 1, 10],
+    combo: ["{n} kez kombo yap", 2, 12], breakOb: ["{n} engel kır", 6, 10], gold: ["{n} altın harf kullan", 2, 10],
   };
   function questsFor(rnd) {
     const keys = Object.keys(QUESTS);
@@ -26,15 +27,15 @@
 
   // ---- chests: name, tokens from-to, boosters (a fraction is the chance of one more), two colours ----
   const CHESTS = {
-    free: ["Bedava sandık", 15, 35, 0.5, "#B9773C", "#7A4A1E"], quest: ["Görev sandığı", 40, 70, 1, "#3FB37A", "#1F7A4E"], star: ["Yıldız sandığı", 50, 90, 2, "#F5B700", "#B87F00"],
-    tier: ["Kademe sandığı", 80, 140, 2, "#9B5DE5", "#5E2FA8"], league: ["Lig sandığı", 100, 160, 2.5, "#F25F5C", "#B83A37"], world: ["Dünya sandığı", 120, 180, 3, "#4D7CFE", "#2C53C4"],
+    free: ["Bedava sandık", 5, 15, 0.5, "#B9773C", "#7A4A1E"], quest: ["Görev sandığı", 20, 35, 1, "#3FB37A", "#1F7A4E"], star: ["Yıldız sandığı", 30, 50, 1, "#F5B700", "#B87F00"],
+    tier: ["Kademe sandığı", 50, 80, 1.5, "#9B5DE5", "#5E2FA8"], league: ["Lig sandığı", 80, 120, 2, "#F25F5C", "#B83A37"], world: ["Dünya sandığı", 60, 90, 2, "#4D7CFE", "#2C53C4"],
   };
   const BOOSTER_KEYS = ["karistir", "yenile", "ipucu", "joker"];
   function chestLoot(kind, rnd) {
     const [, lo, hi, nb] = CHESTS[kind], n = Math.floor(nb) + (rnd() < nb % 1 ? 1 : 0);
     return { tokens: lo + Math.floor(rnd() * (hi - lo + 1)), boosters: Array.from({ length: n }, () => BOOSTER_KEYS[Math.floor(rnd() * BOOSTER_KEYS.length)]) };
   }
-  const STAR_STEP = 12, FREE_MS = 4 * 3600 * 1000; // a star chest every 12 stars; the free chest refills in four hours
+  const STAR_STEP = 30, FREE_MS = 8 * 3600 * 1000; // a star chest every 30 stars (a whole world at three stars); the free chest refills in eight hours
   const parTime = (moves) => moves * 12;           // Klasik: seconds inside which a full finish keeps its third star (12 s for every move the level gives)
   const STREAK = ["?", "*", "!"];                  // a win streak starts the next level with special letters: a joker, then also a gold one, then also a bomb
 
