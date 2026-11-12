@@ -478,7 +478,7 @@ function renderLanding() {
   const qGot = QUEST_KEYS.filter((k) => m.q.got[k]).length, qReady = QUEST_KEYS.some((k) => !m.q.got[k] && (m.q.p[k] || 0) >= Meta.QUESTS[k][1]);
   const inbox = duelsOf().filter((d) => d.b === profile.id && d.sb == null).length, st = homeStage();
   const tiles = [st >= 1 && `<button class="tilebtn" id="l-map">${svgIcon(ICONS.map)}Harita</button>`, st >= 2 && `<button class="tilebtn" id="l-duel">${svgIcon(ICONS.duel)}Düello${inbox ? `<i class="dot" aria-label="${inbox} meydan okuma">${inbox}</i>` : ""}</button>`,
-    st >= 2 && `<button class="tilebtn" id="l-rank">${svgIcon(ICONS.rank)}Sıralama</button>`, st >= 2 && `<button class="tilebtn" id="l-shop">${svgIcon(ICONS.shop)}Mağaza</button>`, `<button class="tilebtn" id="l-help">${svgIcon(ICONS.help)}Nasıl?</button>`].filter(Boolean);
+    st >= 2 && `<button class="tilebtn" id="l-rank">${svgIcon(ICONS.rank)}Sıralama</button>`, st >= 2 && `<button class="tilebtn" id="l-shop">${svgIcon(ICONS.shop)}Mağaza</button>`, `<button class="tilebtn" id="l-help">${svgIcon(ICONS.help)}Nasıl oynanır</button>`].filter(Boolean);
   $("homemid").innerHTML = ""; $("homesheet").classList.add("has-face");
   $("homesheet").innerHTML = `<button class="facebtn" id="l-face" aria-label="Karakterini ya da fotoğrafını değiştir">${avatar(profile)}<i>${svgIcon(ICONS.edit)}</i></button>
     <div class="whoami"><small>Merhaba</small><strong>${esc(profile.name)}</strong>${isAdmin() ? "<em>admin</em>" : ""}
@@ -578,7 +578,7 @@ function settings() {
     <button class="b3 red" id="s-reset">İlerlemeyi sıfırla</button>
     <button class="b3 ghost" id="s-close">Kapat</button>`);
   bindTogs();
-  const note = () => ($("s-note").textContent = { renk: "Renk: kelime yok. Aynı renkten en az 3 taşı birleştir, çizdiğin yol blok olsun. Rekor ve lig puanı yazılmaz.", rahat: "Rahat: yazabileceğin kelimeler gösterilir; dokununca harfleri parlar. Rekor ve lig puanı yazılmaz.", klasik: "Klasik: kelimeleri kendin bulursun. Rekor ve lig puanı yazılır; hızlı bitirirsen süre bonusu alırsın." }[prefs.mode] + (G && !$("app").hidden ? " Bir sonraki bölümde geçerli olur." : ""));
+  const note = () => ($("s-note").textContent = { renk: "Renk: kelime yok. Aynı renkten en az 3 taşı birleştir, çizdiğin yol blok olsun. Rekor ve lig puanı yazılmaz.", rahat: "Rahat: yazabileceğin kelimeler gösterilir; dokununca harfleri parlar. Rekor ve lig puanı yazılmaz.", klasik: "Klasik: kelimeleri kendin bulursun. Rekor ve lig puanı yazılır; süre sınırının altındaki her saniye ayrıca puan verir." }[prefs.mode] + (G && !$("app").hidden ? " Bir sonraki bölümde geçerli olur." : ""));
   $("s-mode").querySelectorAll("button").forEach((b) => (b.onclick = () => { prefs.mode = b.dataset.m; store.set("sw4:prefs", prefs); $("s-mode").querySelectorAll("button").forEach((x) => x.setAttribute("aria-selected", x === b)); note(); snd.play("toggle"); }));
   note();
   paintFaces();
@@ -702,11 +702,15 @@ function firstOf(t) {
   if (!FIRST) { FIRST = {}; for (let m = 0; m < 100; m++) { const L = Core.levelDef(m); for (const g of L.goals) FIRST[g.type] ??= m; if (L.rise) FIRST.rise ??= m; } }
   return FIRST[t];
 }
+// What the three stars are for, in one line: finishing, moves to spare, the time. A bonus level's stars are score steps.
+const starRule = (L) => (L.joker ? [0.4, 0.7, 1].map((f, i) => `${"★".repeat(i + 1)} ${Math.round(L.goals[0].need * f)}`).join(" · ") + " puan"
+  : `★ bitir · ★ ${L.spare} hamle artır · ★ ${mmss(Meta.parTime(L.moves, prefs.mode === "renk"))} içinde`);
 function intro(n) { // short on purpose: the goals and Başla. A rule is explained on the level that brings it; the mode lives in Settings.
   const L = Core.levelDef(n), theme = L.joker ? JOKER_THEME : THEMES[L.world], rec = prefs.mode === "klasik" && recordOf(n), newWorld = n % 10 === 0 && n > 0, ws = L.joker ? 0 : Math.min(Meta.STREAK.length, meta().ws || 0);
   const fresh = (t) => firstOf(t) === n, got = profile.stars[n] || 0;
   card(`<div class="lvlhead">${L.joker ? `<span class="badge">Joker bölümü</span>` : newWorld ? `<span class="badge plain">Yeni dünya · yeni engel</span>` : L.boss ? `<span class="badge boss">Patron bölümü</span>` : ""}<h2>Bölüm ${n + 1}</h2><p>${L.joker ? "Bol joker ve altın harf, ekstra hediye" : `${L.biome} dünyası`} · ${L.moves} hamle</p></div>
     ${goalRows(L, null, (t) => fresh(t) && !DEMOS[t])}${L.goals.map((g) => (fresh(g.type) ? demoHTML(g.type) : "")).join("")}${floorLine(L, !fresh("rise"))}
+    <p class="starrule">${starRule(L)}</p>
     ${got ? `<div class="stars">${[1, 2, 3].map((k) => star(k <= got, 34)).join("")}</div>` : ""}
     ${rec ? `<button class="reclink" id="i-top" aria-label="Bu bölümün ilk 10'u">${CUP}${rec.me ? `Rekor sende: ${rec.score} puan` : `Rekor: ${esc(rec.name)} · ${rec.score} puan`} ›</button>` : ""}
     ${ws ? `<p class="wsline">${svgIcon(ICONS.flame)}Galibiyet serisi ×${ws}: ${["joker", "joker ve altın harf", "joker, altın ve bomba harfi"][ws - 1]} ile başlıyorsun</p>` : ""}
@@ -763,7 +767,7 @@ function howTo(done, hues = prefs.mode === "renk") {
 function helpCard(L) { // in a level: just this level's goals; the rules are one tap further
   if (!L) return howTo();
   busy = true;
-  card(`<h2>Bu bölümde</h2>${goalRows(L, G.left, (t) => !DEMOS[t])}${floorLine(L)}${L.goals.map((g) => demoHTML(g.type)).join("")}
+  card(`<h2>Bu bölümde</h2>${goalRows(L, G.left, (t) => !DEMOS[t])}<p class="starrule">${starRule(L)}</p>${floorLine(L)}${L.goals.map((g) => demoHTML(g.type)).join("")}
     <button class="b3 blue" id="h-ok">Anladım</button><button class="b3 ghost" id="h-how">Nasıl oynanır?</button>`);
   $("h-ok").onclick = () => { closeCard(); busy = false; };
   $("h-how").onclick = () => howTo();
@@ -780,7 +784,7 @@ function baseState(L, rnd, mode, hues = false) { // hues: the wordless mode, col
 }
 function startLevel(n) {
   abandon();
-  G = baseState(Core.levelDef(n), Math.random, "level", prefs.mode === "renk"); G.rec = recordOf(n); G.easy = prefs.mode === "rahat"; G.casual = prefs.mode !== "klasik"; G.timed = !G.casual && !G.L.joker; G.clock = 0; // Klasik levels are timed: the clock never ends a level; seconds under the time are bonus points, and the time ranks the level
+  G = baseState(Core.levelDef(n), Math.random, "level", prefs.mode === "renk"); G.rec = recordOf(n); G.easy = prefs.mode === "rahat"; G.casual = prefs.mode !== "klasik"; G.timed = !G.L.joker; G.clock = 0; // every level but a bonus one is timed: the clock never ends a level, it decides the time star; in Klasik seconds under the time are also points and the time ranks the level
   if (!G.L.joker) streakTiles(G.grid, Math.min(Meta.STREAK.length, meta().ws || 0));
   openScreen();
 }
@@ -987,7 +991,7 @@ function renderTop() {
   if (G.mode === "duel") { const s = Math.ceil(G.timeLeft); $("moves-n").textContent = `${Math.floor(s / 60)}:${pad(s % 60)}`; $("moves-l").textContent = "süre"; $("moves").classList.toggle("low", G.timeLeft <= 15); }
   else { $("moves-n").textContent = G.moves; $("moves-l").textContent = "hamle"; $("moves").classList.toggle("low", G.moves <= 3); }
   $("t-sub").textContent = (G.rec && !G.rec.me && !G.passed ? `${G.score} / ${G.rec.score} puan` : `${G.score} puan`) + (G.timed ? ` · ${mmss(G.clock)}` : "");
-  $("t-sub").classList.toggle("late", !!G.timed && G.clock > Meta.parTime(G.L.moves));
+  $("t-sub").classList.toggle("late", !!G.timed && G.clock > Meta.parTime(G.L.moves, G.hues));
 }
 function renderBoosters() {
   $("boosters").innerHTML = Object.keys(BOOSTERS).map((k) => { const n = isAdmin() ? "∞" : inv()[k];
@@ -1262,11 +1266,12 @@ function afterTurn() {
   setTimeout(noRoom, 300);
 }
 function partialRows() { return `<div class="goallist">${G.L.goals.map((g) => { const o = goalOf(g.type); return `<div>${o.svg}<span><strong>${o.name}: ${g.need - Math.max(0, G.left[g.type])} / ${g.need}</strong></span></div>`; }).join("")}</div>`; }
+const passStars = () => (G.mode === "level" && G.L.joker ? Core.starsFor(G.L, G.left) : 0); // only a bonus level can be passed short of its goal
 function outOfMoves() {
   busy = true; snd.play("fail");
-  const s = Core.starsFor(G.L, G.left);
-  card(`<h2>Hamle bitti</h2><div class="stars">${[1, 2, 3].map((k) => star(k <= s, 40)).join("")}</div>${partialRows()}
-    <p>${s ? `${s} yıldızla geçebilirsin. 5 hamle daha ile üç yıldız alabilirsin.` : "Geçmek için hedeflerin en az %40'ı lazım."}</p>
+  const s = passStars();
+  card(`<h2>Hamle bitti</h2>${G.L.joker ? `<div class="stars">${[1, 2, 3].map((k) => star(k <= s, 40)).join("")}</div>` : ""}${partialRows()}
+    <p>${s ? `${s} yıldızla geçebilirsin. 5 hamle daha ile daha çok yıldız alabilirsin.` : G.L.joker ? "Geçmek için puan hedefinin en az %40'ı lazım." : "Bölümü geçmek için hedeflerin hepsi lazım."}</p>
     <button class="b3 xl" id="o-ad">▶ Reklam izle: +5 hamle</button>
     ${canPay(Meta.COST.moves) ? `<button class="b3 blue" id="o-tok">${COIN}${Meta.COST.moves} jeton: +5 hamle</button>${purse()}` : ""}
     ${s ? `<button class="b3 green" id="o-take">${s} yıldızla bitir</button>` : `<button class="b3 blue" id="o-retry">Yeniden başla</button>`}<button class="b3 ghost" id="o-map">Harita</button>`);
@@ -1278,7 +1283,7 @@ function outOfMoves() {
 }
 function noRoom() {
   busy = true; snd.play("fail");
-  const stones = G.board.some((v) => v && v.stone), canDiscard = G.hand.length > 0, s = G.mode === "level" ? Core.starsFor(G.L, G.left) : 0, what = stones ? "en alttaki 2 taş sırasını kaldır" : canDiscard ? "bloklarını at" : "yeni harfler al";
+  const stones = G.board.some((v) => v && v.stone), canDiscard = G.hand.length > 0, s = passStars(), what = stones ? "en alttaki 2 taş sırasını kaldır" : canDiscard ? "bloklarını at" : "yeni harfler al";
   card(`<h2>Yer kalmadı</h2><p>Tahtada bu blokları koyacak yer yok.</p>${G.mode === "level" ? partialRows() : ""}
     <button class="b3 xl" id="o-ad">▶ Reklam izle: ${what}</button>
     ${canPay(Meta.COST.rescue) ? `<button class="b3 blue" id="o-tok">${COIN}${Meta.COST.rescue} jeton: ${what}</button>${purse()}` : ""}
@@ -1291,9 +1296,12 @@ function noRoom() {
 }
 function levelEnd(stars, finishedAll) {
   busy = true;
-  const par = Meta.parTime(G.L.moves), took = Math.round(G.clock || 0), fast = G.timed && finishedAll ? Math.max(0, par - took) : 0; // Klasik: every second under the time is a point; stars only count goals
-  if (G.timed && finishedAll) { profile.time ||= {}; profile.time[G.L.n] = Math.min(profile.time[G.L.n] || Infinity, took); }
-  const L = G.L, bonus = (finishedAll ? G.moves * 20 : 0) + fast, final = G.score + bonus, prev = profile.stars[L.n] || 0, prevBest = profile.best[L.n] || 0, rec = recordOf(L.n);
+  const L = G.L, par = Meta.parTime(L.moves, G.hues), took = Math.round(G.clock || 0), own = G.moves - G.extraMoves, spared = own >= L.spare, inTime = took <= par, won = finishedAll && !L.joker;
+  if (won) stars = Core.starsWon(L, own, inTime); // one for finishing, one for moves to spare (bought moves do not count), one for the time
+  const ranked = G.timed && !G.casual && finishedAll, fast = ranked ? Math.max(0, par - took) : 0; // Klasik: every second under the time is also a point, and the time ranks the level
+  if (ranked) { profile.time ||= {}; profile.time[L.n] = Math.min(profile.time[L.n] || Infinity, took); }
+  const rule = (ok, text) => `<div class="${ok ? "ok" : ""}">${star(ok, 20)}<span>${text}</span></div>`;
+  const bonus = (finishedAll ? G.moves * 20 : 0) + fast, final = G.score + bonus, prev = profile.stars[L.n] || 0, prevBest = profile.best[L.n] || 0, rec = recordOf(L.n);
   const any = () => Meta.BOOSTER_KEYS[Math.floor(Math.random() * Meta.BOOSTER_KEYS.length)], gifts = []; // only bonus (joker) levels hand out boosters: one the first time it is passed, one more for its third star
   if (L.joker) { if (!prev) gifts.push(any()); if (stars === 3 && prev < 3) gifts.push(any()); }
   gifts.forEach((k) => inv()[k]++);
@@ -1306,8 +1314,10 @@ function levelEnd(stars, finishedAll) {
   const recLine = beat ? `${esc(rec.name)} geride kaldı: bu bölümün rekoru artık sende!` : rec && !rec.me ? `Rekor hâlâ ${esc(rec.name)}'de: ${rec.score} puan` : prevBest && gain ? "Kendi rekorunu geçtin" : "";
   card(`<div class="lvlhead"><div class="stars">${[1, 2, 3].map((s, i) => star(s <= stars).replace("<svg", `<svg style="animation-delay:${0.2 + i * 0.25}s"`)).join("")}</div>
     <h2>Bölüm ${L.n + 1} ${stars === 3 ? "tamam!" : "geçildi"}</h2></div><div class="big" id="o-score">${G.score}</div>
-    <p>${finishedAll ? (G.moves ? `Kalan ${G.moves} hamle × 20 = +${G.moves * 20}` : "Son hamlede bitirdin.") : `Hedeflerin bir kısmı kaldı. Tekrar oynayıp ${stars + 1}. yıldızı alabilirsin.`}</p>
-    ${G.timed && finishedAll ? `<p class="${fast ? "rec" : "modenote"}">Süre ${mmss(took)} · ${fast ? `süre bonusu +${fast}` : `süre bonusu yok (sınır ${mmss(par)})`}</p>` : ""}
+    ${won ? `<div class="starlist">${rule(true, "Hedefler tamam")}
+      ${rule(spared, G.extraMoves ? "Ek hamle aldın: hamle yıldızı yok" : `${G.moves} hamle arttı${spared ? "" : ` · yıldız için ${L.spare}`}${G.moves ? ` · +${G.moves * 20} puan` : ""}`)}
+      ${rule(inTime, `Süre ${mmss(took)}${inTime ? "" : ` · yıldız için ${mmss(par)}`}${fast ? ` · +${fast} puan` : ""}`)}</div>`
+      : `<p>${finishedAll ? (G.moves ? `Kalan ${G.moves} hamle × 20 = +${G.moves * 20}` : "Son hamlede bitirdin.") : `Hedefin bir kısmı kaldı. Tekrar oynayıp ${stars + 1}. yıldızı alabilirsin.`}</p>`}
     ${G.casual ? (homeStage() >= 2 ? `<p class="modenote">Rekor ve lig puanı için Ayarlar'dan Klasik modu seç.</p>` : "") : recLine ? `<p class="rec">${recLine}</p>` : ""}${gain ? `<p>Haftalık lig: +${gain} puan</p>` : ""}
     <p class="earn"><span>${COIN}+${tok} jeton</span>${m.ws >= 2 ? `<span><span class="fl">${svgIcon(ICONS.flame)}</span>Galibiyet serisi ×${m.ws}</span>` : ""}${homeStage() ? `<span>${chestLine}</span>` : ""}</p>
     ${gifts.length ? `<h3>Hediyeler</h3><div class="gifts">${giftTiles(gifts, 0.9, 0.18)}</div>` : ""}

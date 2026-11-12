@@ -141,7 +141,9 @@ for (const kind in Mt.CHESTS) {
   for (let i = 0; i < 400; i++) { const l = Mt.chestLoot(kind, r); minT = Math.min(minT, l.tokens); maxT = Math.max(maxT, l.tokens); minB = Math.min(minB, l.boosters.length); maxB = Math.max(maxB, l.boosters.length); assert(l.boosters.every((k) => Mt.BOOSTER_KEYS.includes(k))); }
   assert(minT >= lo && maxT <= hi && maxT > minT, kind + " chest tokens"); assert(minB === Math.floor(nb) && maxB === Math.ceil(nb), kind + " chest boosters");
 }
-assert.strictEqual(Mt.parTime(12), 144);
+assert.strictEqual(Mt.parTime(12), 144); assert.strictEqual(Mt.parTime(12, true), 96);
+{ const L = C.levelDef(14); assert(L.spare === Math.max(2, Math.round(L.moves * 0.2)) && C.levelDef(6).spare === undefined, "a level asks for a fifth of its moves to spare; a joker level does not");
+  assert.deepStrictEqual([C.starsWon(L, 0, false), C.starsWon(L, L.spare, false), C.starsWon(L, L.spare - 1, true), C.starsWon(L, L.spare, true)], [1, 2, 2, 3], "finish, moves to spare, inside the time: a star each"); }
 { const run = Mt.cleanRun([[5, 40], [1, 10], "x", [9, -3], [20, 90], [3]]);
   assert.deepStrictEqual(run, [[1, 10], [5, 40], [20, 90]]); assert.deepStrictEqual([0, 1, 4, 5, 19, 20, 500].map((t) => Mt.ghostAt(run, t)), [0, 10, 10, 40, 40, 90, 90]);
   assert.deepStrictEqual(Mt.cleanRun("nope"), []); assert.strictEqual(Mt.quickIdx(2), 2); assert.strictEqual(Mt.quickIdx(99), null); assert.strictEqual(Mt.quickIdx("1"), null); }

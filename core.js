@@ -392,11 +392,15 @@
     if (isBoss(n)) for (let k = 0; k < 2; k++) { const up = riseRow(start, k); if (up) { start = up; risen++; } }
     rubble(start, rubbleOf(n), r);
     const moves = Math.ceil(botMoves(n) * (n < 10 ? 1.6 : n < 30 ? 1.4 : 1.3)) + 2 * Math.floor(n / 100); // people plan less sharply than the bot, beginners least; later rounds carry more obstacles
-    const types = goals.map((g) => g.type);
-    return { n, world, biome, joker: false, boss: isBoss(n), rise, risen, goals, board: start, moves: moves + (isBoss(n) ? 3 : 0), plantRate: 0.5,
+    const types = goals.map((g) => g.type), total = moves + (isBoss(n) ? 3 : 0);
+    return { n, world, biome, joker: false, boss: isBoss(n), rise, risen, goals, board: start, moves: total, spare: Math.max(2, Math.round(total * 0.2)), plantRate: 0.5,
       rates: { ...BASE_RATES, crystal: types.includes("crystal") ? 0.15 : 0, bomb: types.includes("bomb") ? 0.09 : n < BOMB_FROM ? 0 : BASE_RATES.bomb } };
   }
-  // Stars from how much of the goals got done: all = 3, 70% = 2, 40% = 1, less = level not passed
+  // Stars. A level must be finished to pass: one star for finishing, one for finishing with L.spare of its own moves left (a fifth of the budget),
+  // one for finishing inside the time (the page keeps the clock; Meta.parTime gives the limit).
+  const starsWon = (L, movesLeft, inTime) => 1 + (movesLeft >= L.spare ? 1 : 0) + (inTime ? 1 : 0);
+  // A bonus (joker) level has no such stars: its stars are how much of the score goal got done: all = 3, 70% = 2, 40% = 1, less = not passed.
+  // The test bot also uses this to say how far a run got.
   function starsFor(L, left) {
     const f = L.goals.reduce((a, g) => a + Math.min(1, (g.need - Math.max(0, left[g.type])) / g.need), 0) / L.goals.length;
     return f >= 0.999 ? 3 : f >= 0.7 ? 2 : f >= 0.4 ? 1 : 0;
@@ -446,7 +450,7 @@
   }
 
   const api = { M, H, B, BOX, MIN_LEN, MAX_LEN, BASE_RATES, WORLDS, BIOMES, OBST, REGIONS, worldOf, isWord, resolveWord, letterOf, kindOf, findWords, adjacent, shapeOf, makePiece,
-    plantWord, resolveChain, findChains, collapse, freshGrid, shuffleGrid, ensureFor, rngFrom, levelDef, botMoves, isJoker, isBoss, rubble, riseRow, floorTurn, sinkStones, starsFor, clearPoints, boardProgress, emptyBoard, newOb, canPlace, fits, place, bestMove };
+    plantWord, resolveChain, findChains, collapse, freshGrid, shuffleGrid, ensureFor, rngFrom, levelDef, botMoves, isJoker, isBoss, rubble, riseRow, floorTurn, sinkStones, starsFor, starsWon, clearPoints, boardProgress, emptyBoard, newOb, canPlace, fits, place, bestMove };
   api.setSize = (cols, rows = cols) => { M = cols; H = rows; api.M = cols; api.H = rows; };
   if (typeof module !== "undefined") module.exports = api; else root.Core = api;
 })(typeof window !== "undefined" ? window : globalThis);

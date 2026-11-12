@@ -343,6 +343,10 @@ button.pill { cursor: pointer; } .pill svg { width: 18px; height: 18px; } .pill 
 .wchip { border: 0; border-radius: 999px; padding: 3px 11px; cursor: pointer; background: rgba(255,255,255,.92); color: var(--ink); font: 700 .82rem var(--display); letter-spacing: .06em; text-transform: uppercase; box-shadow: 0 2px 0 rgba(0,0,0,.2); }
 .wchip:active { transform: translateY(1px); }
 .modenote { font-size: .8rem; }
+/* what the three stars are for (level card) and which of them were earned (level end) */
+.starrule { font-size: .84rem; font-weight: 700; color: var(--ink) !important; }
+.starlist { display: grid; gap: 6px; text-align: left; } .starlist > div { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 12px; background: var(--well); font-size: .86rem; font-weight: 600; color: var(--muted); }
+.starlist > div.ok { color: var(--ink); } .starlist svg { flex: none; }
 /* Renk mod: tiles are colours with a shape each; special tiles keep their colour and wear a ring */
 .tile.hue, .tile.hue.gold, .tile.hue.bomb, .tile.hue.crystal { color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.35); background: radial-gradient(circle at 35% 28%, rgba(255,255,255,.6) 0 12%, var(--h) 46%, var(--hd) 100%); }
 .tile.h1 { --h: #F25F5C; --hd: #B83A37; } .tile.h2 { --h: #F5B700; --hd: #B87F00; } .tile.h3 { --h: #2BC48A; --hd: #198C60; } .tile.h4 { --h: #4D7CFE; --hd: #2C53C4; } .tile.h5 { --h: #9B5DE5; --hd: #5E2FA8; }
