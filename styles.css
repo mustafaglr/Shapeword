@@ -175,6 +175,9 @@ main { position: relative; z-index: 1; max-width: 430px; margin: 0 auto; display
 .tilebtn { border: 0; border-radius: 18px; padding: 10px 4px 8px; cursor: pointer; color: #fff; display: flex; flex-direction: column; align-items: center; gap: 4px; font: 700 .74rem var(--ui); background: rgba(255,255,255,.12); box-shadow: inset 0 0 0 1.5px var(--glass-line); }
 .tilebtn svg { width: 26px; height: 26px; }
 .tilebtn:active { transform: scale(.95); }
+/* a home button that opens at a later level: there from the start, dimmed, with a lock */
+.act.locked, .tilebtn.locked { position: relative; opacity: .5; } .act.locked b { font-size: .7rem; }
+.locked .lk { position: absolute; top: 5px; right: 5px; width: 14px; height: 14px; line-height: 0; } .locked .lk svg { width: 100%; height: 100%; }
 .cloudline { font-size: .72rem; color: var(--soft); text-align: center; margin: 0; }
 .nameform { display: flex; flex-direction: column; gap: 12px; }
 .nameform label { font: 700 1.3rem var(--display); }

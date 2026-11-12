@@ -467,7 +467,8 @@ function landing() {
   }
   renderLanding(); cloudSync().then(() => { settleDuels(); renderLanding(); if (!weekPrize()) dailyReward(); });
 }
-// What the home screen shows: at first only OYNA; chests, quests and the map from level 3; duel, league and shop from level 5.
+// What the home screen opens: at first only OYNA; chests, quests and the map from level 3; duel, league and shop from level 5.
+// The rest is on screen from the start but locked: tapping a locked button says at which level it opens.
 // What has opened on this device stays open (prefs.stage), even if the progress is reset.
 const stageNow = () => (isAdmin() || nextLevel() >= 4 ? 2 : nextLevel() >= 2 ? 1 : 0), homeStage = () => Math.max(prefs.stage || 0, stageNow());
 const streakOn = () => profile.streak && (profile.streak.last === TODAY || profile.streak.last === YESTERDAY);
@@ -477,23 +478,27 @@ function renderLanding() {
   const n = nextLevel(), w = worldOf(n), m = meta(), cups = cupsOf(profile), t = Meta.tierOf(cups), pend = pendingChests(), freeLeft = m.freeAt - Date.now(), ws = Math.min(Meta.STREAK.length, m.ws || 0);
   const qGot = QUEST_KEYS.filter((k) => m.q.got[k]).length, qReady = QUEST_KEYS.some((k) => !m.q.got[k] && (m.q.p[k] || 0) >= Meta.QUESTS[k][1]);
   const inbox = duelsOf().filter((d) => d.b === profile.id && d.sb == null).length, st = homeStage();
-  const tiles = [st >= 1 && `<button class="tilebtn" id="l-map">${svgIcon(ICONS.map)}Harita</button>`, st >= 2 && `<button class="tilebtn" id="l-duel">${svgIcon(ICONS.duel)}Düello${inbox ? `<i class="dot" aria-label="${inbox} meydan okuma">${inbox}</i>` : ""}</button>`,
-    st >= 2 && `<button class="tilebtn" id="l-rank">${svgIcon(ICONS.rank)}Sıralama</button>`, st >= 2 && `<button class="tilebtn" id="l-shop">${svgIcon(ICONS.shop)}Mağaza</button>`, `<button class="tilebtn" id="l-help">${svgIcon(ICONS.help)}Nasıl oynanır</button>`].filter(Boolean);
+  const tiles = [`<button class="tilebtn" id="l-map">${svgIcon(ICONS.map)}Harita</button>`, `<button class="tilebtn" id="l-duel">${svgIcon(ICONS.duel)}Düello${inbox ? `<i class="dot" aria-label="${inbox} meydan okuma">${inbox}</i>` : ""}</button>`,
+    `<button class="tilebtn" id="l-rank">${svgIcon(ICONS.rank)}Sıralama</button>`, `<button class="tilebtn" id="l-shop">${svgIcon(ICONS.shop)}Mağaza</button>`, `<button class="tilebtn" id="l-help">${svgIcon(ICONS.help)}Nasıl oynanır</button>`];
   $("homemid").innerHTML = ""; $("homesheet").classList.add("has-face");
   $("homesheet").innerHTML = `<button class="facebtn" id="l-face" aria-label="Karakterini ya da fotoğrafını değiştir">${avatar(profile)}<i>${svgIcon(ICONS.edit)}</i></button>
     <div class="whoami"><small>Merhaba</small><strong>${esc(profile.name)}</strong>${isAdmin() ? "<em>admin</em>" : ""}
       ${st ? `<div class="pills">${st >= 2 ? `<button class="pill" id="l-tier" aria-label="Kademe ${Meta.TIERS[t][0]}, ${cups} kupa">${tierBadge(t)}${Meta.TIERS[t][0]} · ${cups}</button>` : ""}<span class="pill" aria-label="${isAdmin() ? "Sınırsız" : m.tokens} jeton">${COIN}${isAdmin() ? "∞" : m.tokens}</span><span class="pill" aria-label="${totalStars()} yıldız"><b>★</b>${totalStars()}</span></div>` : ""}</div>
     <div class="prog"><span>${Core.BIOMES[w]} dünyası</span><div><i style="width:${(n % 10) * 10}%"></i></div><span>${n % 10} / 10</span></div>
     <button class="b3 xl" id="l-go">OYNA · Bölüm ${n + 1}${ws ? `<i class="ws" aria-label="Galibiyet serisi ${ws}">${svgIcon(ICONS.flame)}×${ws}</i>` : ""}</button>
-    ${st ? `<div class="acts">
+    <div class="acts">
       <button class="act${freeLeft <= 0 ? " ready" : ""}" id="l-free">${chestIcon("free")}<span>Bedava sandık</span><b id="l-free-t">${freeLeft <= 0 ? "Aç!" : hms(freeLeft)}</b></button>
       <button class="act${pend.length ? " ready" : ""}" id="l-box">${chestIcon(pend[0] || "star")}<span>${pend.length ? Meta.CHESTS[pend[0]][0] : "Yıldız sandığı"}</span><b>${pend.length > 1 ? pend.length + " sandık" : pend.length ? "Aç!" : `★ ${totalStars() % Meta.STAR_STEP} / ${Meta.STAR_STEP}`}</b></button>
       <button class="act${qReady ? " ready" : ""}" id="l-quest">${svgIcon(ICONS.quest)}<span>Görevler</span><b>${qReady ? "Ödül hazır" : `${qGot} / 3`}</b></button>
-    </div>` : ""}
-    <div class="tiles" style="grid-template-columns:repeat(${tiles.length},1fr)">${tiles.join("")}</div>
+    </div>
+    <div class="tiles">${tiles.join("")}</div>
     <p class="cloudline">${streakOn() ? `${profile.streak.n} gün üst üste · ` : ""}${cloudInfo}</p>`;
   homeScene(w);
-  const on = (id, fn) => { const el = $(id); if (el) el.onclick = fn; }; // a stage that is not open yet has no such button
+  for (const [id, at] of [["l-free", 3], ["l-box", 3], ["l-quest", 3], ["l-map", 3], ["l-duel", 5], ["l-rank", 5], ["l-shop", 5]]) if (st < (at === 3 ? 1 : 2)) { // not open yet: dimmed, with a lock and the level it opens at
+    const el = $(id), b = el.querySelector("b"); el.classList.add("locked"); el.classList.remove("ready"); el.dataset.at = at; el.setAttribute("aria-label", `${el.querySelector("span")?.textContent || el.textContent.trim()}: Bölüm ${at}'te açılır`);
+    if (b) { b.removeAttribute("id"); b.textContent = `Bölüm ${at}`; } el.querySelector(".dot")?.remove(); el.insertAdjacentHTML("beforeend", `<i class="lk">${svgIcon(ICONS.lock)}</i>`);
+  }
+  const on = (id, fn) => { const el = $(id); if (el) el.onclick = el.classList.contains("locked") ? () => toast(`Bölüm ${el.dataset.at}'te açılır`) : fn; };
   on("l-face", settings); on("l-go", () => intro(n)); on("l-map", openMap); on("l-duel", duelHub); on("l-help", () => howTo()); on("l-rank", () => rankCard()); on("l-shop", () => shopCard());
   on("l-tier", () => rankCard("cups")); on("l-quest", questCard);
   on("l-free", () => (meta().freeAt <= Date.now() ? chestCard("free") : toast(`Bedava sandık ${hms(meta().freeAt - Date.now())} sonra açılır`)));
