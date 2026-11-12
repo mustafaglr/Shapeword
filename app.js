@@ -36,7 +36,7 @@ const ART = (window.Scenes && Scenes.ICONS) || {};
 const obIcon = (k) => ART[k] || `<svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="6" fill="${(OB[k === "buzCrack" ? "buz" : k] || OB.kutuk)[2]}"/></svg>`;
 const LETTER_GOALS = {
   crystal: { name: "Kristal", svg: '<svg viewBox="0 0 24 24"><path d="M12 2l7 7-7 13L5 9z" fill="#B57BFF" stroke="#6D28D9" stroke-width="1.5" stroke-linejoin="round"/><path d="M5 9h14M12 2v20" stroke="#EADBFF" stroke-width="1"/></svg>',
-    how: "Harf alanındaki mor, parlayan harfleri kelimende kullan. Her kristal harf 1 sayar. Alanda her zaman en az bir kristal bulunur." },
+    how: "Mor kristalle blok yap: blokta kristalli bir kare olur. O kare patlayınca kristal toplanır: satırını, sütununu ya da kutusunu doldur. Alanda her zaman en az bir kristal bulunur." },
   long: { name: "5+ harf", svg: '<svg viewBox="0 0 24 24"><rect x="1.5" y="6" width="21" height="12" rx="4" fill="#4D7CFE"/><text x="12" y="15.3" font-size="8" text-anchor="middle" fill="#fff" font-family="sans-serif" font-weight="700">5+</text></svg>',
     how: "En az 5 harfli kelimeler yaz. Çapraz bağlantı serbest, uzun yollar daha kolay bulunur." },
   bomb: { name: "Bomba", svg: '<svg viewBox="0 0 24 24"><circle cx="11" cy="14" r="7" fill="#2B2240"/><path d="M15 9l3-3" stroke="#2B2240" stroke-width="2.2"/><circle cx="19" cy="5" r="2.2" fill="#FF5A4F"/><circle cx="9" cy="12" r="1.6" fill="#6B5A8C"/></svg>',
@@ -628,9 +628,12 @@ $("map-back").onclick = landing; $("map-jump").onclick = () => jumpToCurrent(tru
 
 // ---- obstacle demos: a board corner played frame by frame, on the "?" card and when a world begins ----
 // A frame is three rows of five cells (the left three columns are one 3×3 box): . empty, b block, n block just placed, x cell that clears, e block being swallowed,
+// k/c/q the same three with a crystal on them (new, placed, clearing),
 // O the obstacle (C cracked, F faded, S shielded, 1-5 its countdown, ! stinging, * breaking), G generator (g breaking), A the gold letter a bud gives.
 // Every group of n is a shape a word can make (3-6 touching cells). A frame without a caption keeps the one before it.
 const DEMOS = {
+  crystal: [["knn../...../.....", "Kristalle yaptığın blokta kristalli bir kare olur."], ["cbb../nnn../.....", "O karenin kutusunu (ya da satırını, sütununu) doldur."], ["cbb../bbb../nnn.."],
+    ["qxx../xxx../xxx..", "Kare patlayınca kristal toplanır."], ["...../...../....."]],
   kutuk: [["O..../...O./.....", "Kütük kendiliğinden kırılmaz, bir patlama ister."], ["Onn../.nnO./.....", "3×3 kutuyu (ya da bir satırı, sütunu) doldur."], ["Obb../nbbO./nnn.."],
     ["*xx../xxx*./xxx..", "Kutu patlar: içindeki ve hemen yanındaki kütükler kırılır."], ["...../...../....."]],
   akrep: [["...../.5.../.....", "Akrebin sayacı, koyduğun her blokta 1 azalır."], ["nnn../.4.../....."], ["bbb../n3.../nn..."], ["bbb../b2n../bbnn.", "0 olmadan kutusunu doldur: patlayınca ezilir."], ["xxx../x*x../xxxb."],
@@ -654,23 +657,24 @@ function demoFrame(kind, frame) {
   const ob = (cls = "", badge = "", icon = kind) => `<div class="cell ob${cls}" data-ob="${kind}"><b>${obIcon(icon)}${badge}</b></div>`;
   const block = (color, cls = "") => `<div class="cell on${cls}"><b style="background:${color}"></b></div>`;
   return [...frame.replace(/\//g, "")].map((ch, i) => {
-    const out = ch === "." ? `<div class="cell"><b></b></div>` : ch === "b" ? block(COLORS[3]) : ch === "n" ? block(COLORS[1], " new") : ch === "x" ? block(COLORS[3], " clr") : ch === "e" ? block(COLORS[1], " eat")
+    const out = ch === "." ? `<div class="cell"><b></b></div>` : ch === "b" ? block(COLORS[3]) : ch === "n" ? block(COLORS[1], " new") : ch === "x" ? block(COLORS[3], " clr") : ch === "k" ? block(COLORS[1], " new gem") : ch === "c" ? block(COLORS[3], " gem") : ch === "q" ? block(COLORS[3], " clr gem") : ch === "e" ? block(COLORS[1], " eat")
       : ch === "O" ? ob() : ch === "C" ? ob("", "", "buzCrack") : ch === "F" ? ob(" off") : ch === "S" ? ob(" shielded") : ch === "*" ? ob(" brk") : ch === "G" ? ob("", "", "jenerator") : ch === "g" ? ob(" brk", "", "jenerator")
       : ch === "A" ? `<div class="cell"><b class="gilt">${star(true, 20)}</b></div>` : ch === "!" ? ob(" sting", `<em class="hot">0</em>`) : ob("", `<em${ch <= 2 ? ' class="hot"' : ""}>${ch}</em>`);
     return i % 5 > 2 ? out.replace('class="cell', 'class="cell bx') : out; // the neighbouring box is shaded, as on the board
   }).join("");
 }
 function playDemo() { // call once the card is on screen; it stops by itself when the card goes
-  const el = $("ov").querySelector(".demo"); if (!el) return;
-  const frames = DEMOS[el.dataset.kind]; let k = -1;
-  const step = () => {
-    if (!el.isConnected || $("ov").hidden) return;
-    k = (k + 1) % frames.length; el.firstChild.innerHTML = demoFrame(el.dataset.kind, frames[k][0]);
-    if (frames[k][1]) el.lastChild.textContent = frames[k][1];
-    if (!RM) setTimeout(step, frames[k][1] ? 2300 : 1000);
-  };
-  if (RM) { el.classList.add("manual"); el.onclick = step; } // no motion wanted: the player taps through the steps
-  step();
+  $("ov").querySelectorAll(".demo").forEach((el) => {
+    const frames = DEMOS[el.dataset.kind]; let k = -1;
+    const step = () => {
+      if (!el.isConnected || $("ov").hidden) return;
+      k = (k + 1) % frames.length; el.firstChild.innerHTML = demoFrame(el.dataset.kind, frames[k][0]);
+      if (frames[k][1]) el.lastChild.textContent = frames[k][1];
+      if (!RM) setTimeout(step, frames[k][1] ? 2300 : 1000);
+    };
+    if (RM) { el.classList.add("manual"); el.onclick = step; } // no motion wanted: the player taps through the steps
+    step();
+  });
 }
 
 // ---- level intro and help ----
@@ -681,7 +685,7 @@ const floorLine = (L) => (L.rise ? `<p class="floorline"><span class="floorchip"
 function intro(n) {
   const L = Core.levelDef(n), theme = L.joker ? JOKER_THEME : THEMES[L.world], rec = recordOf(n), newWorld = n % 10 === 0 && n > 0, ws = L.joker ? 0 : Math.min(Meta.STREAK.length, meta().ws || 0);
   card(`<div class="lvlhead">${L.joker ? `<span class="badge">Joker bölümü</span>` : newWorld ? `<span class="badge plain">Yeni dünya · yeni engel</span>` : L.boss ? `<span class="badge boss">Patron bölümü</span>` : ""}<h2>Bölüm ${n + 1}</h2><p>${L.joker ? "Bol joker ve altın harf, ekstra hediye" : `${L.biome} dünyası`} · ${L.moves} hamle</p></div>
-    ${n % 10 === 0 ? goalRows(L, null, true) + demoHTML(L.goals[0].type) : goalRows(L)}${floorLine(L)}
+    ${n % 10 === 0 || n === 1 ? goalRows(L, null, true) + demoHTML(n === 1 ? "crystal" : L.goals[0].type) : goalRows(L)}${floorLine(L)}
     <div class="stars">${[1, 2, 3].map((k) => star(k <= (profile.stars[n] || 0), 34)).join("")}</div>
     <button class="reclink" id="i-top" aria-label="Bu bölümün ilk 10'u">${CUP}${rec ? (rec.me ? `Rekor sende: ${rec.score} puan` : `Rekor: ${esc(rec.name)} · ${rec.score} puan`) : "Bu bölümde henüz rekor yok"} ›</button>
     ${ws ? `<p class="wsline">${svgIcon(ICONS.flame)}Galibiyet serisi ×${ws}: ${["joker", "joker ve altın harf", "joker, altın ve bomba harfi"][ws - 1]} ile başlıyorsun</p>` : "<p>Hepsini bitir ★★★ · %70 ★★ · %40 ★</p>"}
@@ -717,7 +721,7 @@ function tutSteps(hues) {
   const cell = (x, y, fill, cls = "") => `<rect class="${cls}" x="${x}" y="${y}" width="17" height="17" rx="4" fill="${fill}"/>`;
   const board = [0, 1, 2].flatMap((r) => [0, 1, 2, 3, 4, 5].map((c) => cell(9 + 17.5 * c, 26 + 18.5 * r, r === 2 && c !== 3 && c !== 4 ? "#9B5DE5" : "#E9E5F5", r === 2 && c !== 3 && c !== 4 ? "tutrow" : ""))).join("");
   const drop = `<g class="tutdrop">${cell(9 + 17.5 * 3, 63, "#4D7CFE")}${cell(9 + 17.5 * 4, 63, "#4D7CFE")}</g>`;
-  const spec = [["tile gold", "A", "×2 puan"], ["tile bomb", "B", "3×3 patlar"], ["tile joker", "?", "her harf"], ["tile crystal", "K", "hedef"]];
+  const spec = [["tile gold", "A", "×2 puan"], ["tile bomb", "B", "3×3 patlar"], ["tile joker", "?", "her harf"], ["tile crystal", "K", "bloğunu patlat"]];
   return [
     ["Kaydır", hues ? "Aynı renkten en az 3 taşı birleştir." : "Yan yana harfleri kaydırıp kelime yaz.", tutArt(line + field)],
     ["Blok olur", "Çizdiğin yol aynı şekilde bir blok olur.", tutArt(block)],
@@ -924,7 +928,7 @@ function paintCell(i, v = G.board[i]) {
   if (v && v.ob) {
     d.className = `cell${bx} ob${v.off ? " off" : ""}${v.dir === -1 ? " flip" : ""}${v.ob === "cekirdek" && shieldUp ? " shielded" : ""}`; d.dataset.ob = v.ob; b.style.background = "";
     b.innerHTML = obIcon(v.ob === "buz" && v.hp === 1 ? "buzCrack" : v.ob) + (v.t ? `<em${v.t <= 2 ? ' class="hot"' : ""}>${v.t}</em>` : "");
-  } else { d.className = `cell${bx}${v ? " on" : ""}${v && v.stone ? " stone" : ""}`; delete d.dataset.ob; b.innerHTML = ""; b.style.background = v ? (v.stone ? STONE : COLORS[v.color]) : ""; }
+  } else { d.className = `cell${bx}${v ? " on" : ""}${v && v.stone ? " stone" : ""}`; delete d.dataset.ob; b.innerHTML = ""; b.style.background = v ? (v.stone ? STONE : COLORS[v.color]) : ""; if (v && v.gem) d.classList.add("gem"); }
 }
 function setGhost(list, cls = "ghost") { ghostCells.forEach((i) => cellEls[i].classList.remove("ghost", "suggest")); ghostCells = list; list.forEach((i) => cellEls[i].classList.add(cls)); }
 
@@ -932,7 +936,7 @@ function setGhost(list, cls = "ghost") { ghostCells.forEach((i) => cellEls[i].cl
 function blockEl(p, size, cls) {
   const m = document.createElement("div"); m.className = cls;
   m.style.gridTemplateColumns = `repeat(${p.w}, ${size}px)`; m.style.gridTemplateRows = `repeat(${p.h}, ${size}px)`;
-  p.cells.forEach(([r, c], k) => { const i = document.createElement("i"); i.style.gridArea = `${r + 1} / ${c + 1}`; i.style.background = COLORS[p.color]; if (k === p.bombIdx) i.className = "bomb"; m.appendChild(i); });
+  p.cells.forEach(([r, c], k) => { const i = document.createElement("i"); i.style.gridArea = `${r + 1} / ${c + 1}`; i.style.background = COLORS[p.color]; if (k === p.bombIdx) i.className = "bomb"; if (p.gems.includes(k)) i.className = "gem"; m.appendChild(i); });
   return m;
 }
 function renderHand(popIdx = -1) {
@@ -943,7 +947,7 @@ function renderHand(popIdx = -1) {
       if (!Core.fits(G.board, p)) s.classList.add("cant");
       const room = Math.min(62, (h.clientHeight || 64) - 10), m = blockEl(p, Math.min(16, Math.floor((room - 2 * (Math.max(p.w, p.h) - 1)) / Math.max(p.w, p.h))), "mini"); s.appendChild(m);
       s.addEventListener("pointerdown", (e) => startDrag(e, k));
-      s.setAttribute("aria-label", `${p.cells.length} karelik blok${p.bombIdx >= 0 ? ", bombalı" : ""}`);
+      s.setAttribute("aria-label", `${p.cells.length} karelik blok${p.bombIdx >= 0 ? ", bombalı" : ""}${p.gems.length ? ", kristalli" : ""}`);
       if (k === popIdx) anim(m, [{ transform: "scale(0) rotate(-20deg)" }, { transform: "scale(1.2) rotate(4deg)", offset: 0.6 }, { transform: "scale(1) rotate(0)" }], { duration: 380, easing: "ease-out" });
     }
     h.appendChild(s);
@@ -1059,12 +1063,11 @@ function endSwipe() {
   quest("words"); if (w.length >= 5) quest("long"); if (piece.gold) quest("gold", piece.gold);
   if (G.mode === "level") { G.moves--; bump($("moves")); }
   const spots = (kind) => used.filter((i) => Core.kindOf(G.grid[i]) === kind).map((i) => centerOf(tiles[i].el)), pr = Core.wordProgress(w, piece);
-  if (pr.crystal) { credit("crystal", pr.crystal, spots("crystal")); snd.play("crystal"); }
   if (pr.bomb) { credit("bomb", 1, spots("bomb")); snd.play("bombArm"); }
   if (pr.long) credit("long", 1, [centerOf($("wordline"))]);
   const [wx, wy] = centerOf(tiles[used[used.length - 1]].el); popNum(`+${pts}`, wx, wy - 10);
   addScore(pts);
-  const parts = [`${G.hues ? w.length + " taş" : up(w)} +${pts}`]; if (G.chain > 1) parts.push(`Seri x${G.chain}`); if (piece.gold) parts.push("Altın");
+  const parts = [`${G.hues ? w.length + " taş" : up(w)} +${pts}`]; if (G.chain > 1) parts.push(`Seri x${G.chain}`); if (piece.gold) parts.push("Altın"); if (piece.gems.length && G.left.crystal > 0) parts.push("Kristal blokta: patlat");
   say(parts.join(" · "), "ok");
   const res = Core.collapse(G.grid, used, G.rnd, { rates: G.L.rates, plantRate: G.L.plantRate, ensure: Core.ensureFor(G.left), hues: G.hues });
   animateWord(used, res, slotIdx); G.grid = res.grid;
@@ -1108,7 +1111,7 @@ async function placeBlock(k, p, at) {
   busy = settling = true;
   const res = Core.place(G.board, p, at[0], at[1], p.color), placed = p.cells.map(([r, c]) => (at[0] + r) * B + at[1] + c);
   G.hand.splice(k, 1); renderHand(); snd.play("place"); buzz(8);
-  placed.forEach((i, j) => { paintCell(i, { color: p.color }); anim(cellEls[i].firstChild, [{ transform: "scale(.3)" }, { transform: "scale(1.15)", offset: 0.6 }, { transform: "scale(1)" }], { duration: 260, delay: j * 30, easing: "ease-out" }); });
+  placed.forEach((i, j) => { paintCell(i, { color: p.color, gem: p.gems.includes(j) }); anim(cellEls[i].firstChild, [{ transform: "scale(.3)" }, { transform: "scale(1.15)", offset: 0.6 }, { transform: "scale(1)" }], { duration: 260, delay: j * 30, easing: "ease-out" }); });
   addScore(p.cells.length);
   if (res.lines) G.combo++; else if (!res.bombed.length) G.combo = 0;
   const late = new Set(res.late), first = [...res.cleared, ...res.cracked].filter((i) => !late.has(i));
@@ -1118,7 +1121,8 @@ async function placeBlock(k, p, at) {
     if (pts) { popNum(`+${pts}`, bx, by - 20); addScore(pts); }
     cheer(res, p, at);
     const pr = Core.boardProgress(res);
-    for (const kind in pr) credit(kind, pr[kind], [...res.broken.filter((x) => x.ob === kind).map((x) => x.i), ...(kind === "buz" ? res.cracked : [])].map((i) => centerOf(cellEls[i])));
+    for (const kind in pr) credit(kind, pr[kind], [...res.broken.filter((x) => x.ob === kind).map((x) => x.i), ...(kind === "buz" ? res.cracked : kind === "crystal" ? res.gems : [])].map((i) => centerOf(cellEls[i])));
+    if (pr.crystal) snd.play("crystal");
     await ripple(first, res, placed);
   }
   if (res.acts.length || res.unshield) await playActs(res);
@@ -1177,7 +1181,7 @@ async function playActs(res) {
       anim(cellEls[a.i].firstChild, [{ transform: "scale(1)" }, { transform: "scale(1.5) rotate(-12deg)" }, { transform: "scale(1)" }], { duration: 320 });
       if (G.mode === "level") { G.moves = Math.max(0, G.moves - 1); renderTop(); bump($("moves")); const [x, y] = centerOf($("moves")); popNum("−1 hamle", x - 24, y + 44, "bad"); }
     } else if (a.type === "eat") {
-      once("bosluk");
+      once("bosluk"); if (cellEls[a.j].classList.contains("gem")) toast("Boşluk bir kristali yuttu");
       anim(cellEls[a.j].firstChild, [{ transform: "none", opacity: 1 }, { transform: `translate(${dx(a.i, a.j)}px,${dy(a.i, a.j)}px) scale(.1)`, opacity: 0.2 }], { duration: 300, easing: "ease-in" }).then(() => paintCell(a.j, settling ? null : undefined));
       anim(cellEls[a.i].firstChild, [{ transform: "scale(1)" }, { transform: "scale(1.3)" }, { transform: "scale(1)" }], { duration: 320 });
     }

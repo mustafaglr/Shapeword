@@ -28,7 +28,7 @@ Telefonda tarayıcıdan açıp "Ana Ekrana Ekle" dersen kendi simgesiyle tam ekr
 - **Galibiyet serisi:** üst üste geçilen her bölüm bir sonrakine özel harfle başlatır (joker, altın, bomba); yarıda bırakmak seriyi bitirir.
 - **Meydan okuma ve kupalar:** bir oyuncuya meydan okursun, o da aynı harflerle senin oyununun kaydına karşı oynar. Kazanan 30 kupa alır, kaybeden 10 verir; kupalar kademeyi belirler (Bronz → Efsane). Oyuncular birbirine yalnızca hazır kısa mesaj gönderebilir.
 - **Karakter:** varsayılan ismin baş harfi; Ayarlar'dan 10 karakterden biri ya da cihazdan bir fotoğraf seçilebilir. Fotoğraf cihazda 80×80 küçük bir kopyaya çevrilir; yalnızca bu kopya bulut kaydına yazılır ve diğer oyunculara görünür.
-- **Bulut kaydı:** ilk açılışta ismini sorar; aynı isimle başka cihazdan girersen kaldığın yerden devam edersin (JSONBin; şifre yok, test sürümü).
+- **Bulut kaydı:** ilk açılışta ismini sorar; aynı isimle başka cihazdan girersen kaldığın yerden devam edersin (JSONBin; şifre yok, test sürümü). Bütün oyunu sıfırlamak için bin'e `resetAt` (ms) yazılır: doğum zamanı (`born`) bundan eski oyuncular ve meydan okumalar görünmez, böyle bir oyuncusu olan cihaz kaydını unutup isim ekranına döner.
 
 ## Dosyalar
 

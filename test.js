@@ -2,7 +2,7 @@
 const assert = require("assert");
 const C = require("./core.js");
 const rnd = C.rngFrom("test"), B = C.B, at = (r, c) => r * B + c;
-const one = { ...C.shapeOf([0]), bombIdx: -1, gold: 0, crystals: 0 }; // a 1-cell block
+const one = { ...C.shapeOf([0]), bombIdx: -1, gold: 0, gems: [] }; // a 1-cell block
 const row0 = (gap, ob) => { const b = C.emptyBoard(); for (let c = 0; c < 8; c++) b[c] = c === gap ? ob : { color: 0 }; return b; }; // row 0 full but for its last cell
 const count = (b, kind) => b.filter((v) => v && v.ob === kind).length;
 
@@ -11,7 +11,13 @@ for (const w of ["kedi", "kediye", "evde", "kuşlar", "güneş", "zürafa"]) ass
 for (const w of ["xq", "abcdefg", "bals"]) assert(!C.isWord(w), w);
 assert.strictEqual(C.kindOf("a^"), "crystal"); assert.strictEqual(C.kindOf("?"), "joker"); assert.strictEqual(C.kindOf("b!"), "bomb");
 assert(C.adjacent(0, 6) && !C.adjacent(0, 2) && !C.adjacent(4, 5));
-assert.strictEqual(C.makePiece(["a^", "b", "c^", ...Array(22).fill("d")], [0, 1, 2]).crystals, 2);
+assert.deepStrictEqual(C.makePiece(["a^", "b", "c^", ...Array(22).fill("d")], [0, 1, 2]).gems, [0, 2]);
+{ // a crystal rides on its block: writing the word earns nothing, clearing its cell does
+  const gem = C.makePiece(["a^", "b", "c", ...Array(22).fill("d")], [0, 1, 2]), row = C.emptyBoard().map((_, i) => (i >= 3 && i < 8 ? { color: 1 } : null));
+  assert.strictEqual(C.wordProgress("abc", gem).crystal, undefined);
+  const put = C.place(row, gem, 0, 0, 0); assert(put.board[0].gem && !put.board[1].gem && !put.gems.length && !C.progressOf("abc", gem, put).crystal, "placed, not collected yet");
+  const done = C.place(put.board, one, 0, 8, 0); assert.deepStrictEqual(done.gems, [0]); assert.strictEqual(C.progressOf("kedi", one, done).crystal, 1); assert.strictEqual(done.board[0], null);
+}
 const g0 = C.freshGrid(rnd), col = C.collapse(g0, [6, 7, 12], rnd, { plantRate: 1 }); // tiles only ever fall down their own column
 assert.strictEqual(col.moves.length + col.fresh.length, 25);
 for (const m of col.moves) { assert.strictEqual(m.from % 5, m.to % 5); assert(m.to >= m.from); assert.strictEqual(col.grid[m.to], g0[m.from]); }

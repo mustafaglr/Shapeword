@@ -1,7 +1,7 @@
 // Shapeword core: letter grid with special tiles, word paths (8 directions) -> block pieces, 9x9 board with 3x3 boxes and obstacles,
 // and endless generated levels (goals + move budget). Pure functions, no DOM.
 // A grid tile is a string: its letter plus "*" gold, "!" bomb, "^" crystal; "?" alone is a joker (any letter).
-// A board cell is null, {color} (a placed block) or {ob: kind, hp, ...} (an obstacle; each world has its own kind and rule, see OBST).
+// A board cell is null, {color} (a placed block; gem: true where it carries a crystal) or {ob: kind, hp, ...} (an obstacle; each world has its own kind and rule, see OBST).
 (function (root) {
   const words = typeof module !== "undefined" ? require(process.env.WORDS || "./words-tr.js") : root; // the page loads words-tr.js first
   const DICT = new Set(words.DICT_WORDS.split(" "));
@@ -83,7 +83,7 @@
   }
   function makePiece(grid, path) {
     const kinds = path.map((i) => kindOf(grid[i]));
-    return { ...shapeOf(path), bombIdx: kinds.indexOf("bomb"), gold: kinds.filter((k) => k === "gold").length, crystals: kinds.filter((k) => k === "crystal").length };
+    return { ...shapeOf(path), bombIdx: kinds.indexOf("bomb"), gold: kinds.filter((k) => k === "gold").length, gems: kinds.flatMap((k, i) => (k === "crystal" ? [i] : [])) }; // gems: which cells carry a crystal
   }
 
   // ---- the wordless mode: a tile is one of five colours ("1".."5") and a chain of 3-6 touching tiles of one colour is the "word" ----
@@ -230,7 +230,7 @@
         ev.broken.push({ i, ob: v.ob });
         if (o.blast) { ev.blasts.push(i); for (const j of around(i)) if (b[j]) queue.add(j); }
       }
-      b[i] = null; ev.cleared.push(i);
+      b[i] = null; ev.cleared.push(i); if (v.gem) ev.gems.push(i); // a crystal is collected when its cell is cleared, not before
     }
   }
   // After the hits every surviving obstacle makes its move. No randomness, so the bot's forecast is exactly what the player sees.
@@ -257,8 +257,8 @@
   // One turn: put the block down, clear what is full (plus the bomb letter), let the obstacles move, clear what their move completed.
   function place(board, piece, r0, c0, tag) {
     const b = board.slice();
-    for (const [r, c] of piece.cells) b[(r0 + r) * B + c0 + c] = { color: tag };
-    const ev = { lines: 0, regions: [], cleared: [], cracked: [], broken: [], bombed: [], blasts: [], blocked: [], acts: [], late: [], stings: 0 };
+    piece.cells.forEach(([r, c], k) => (b[(r0 + r) * B + c0 + c] = piece.gems.includes(k) ? { color: tag, gem: true } : { color: tag }));
+    const ev = { lines: 0, regions: [], cleared: [], gems: [], cracked: [], broken: [], bombed: [], blasts: [], blocked: [], acts: [], late: [], stings: 0 };
     const hadShield = has(b, "jenerator"), full = fullRegions(b), seeds = new Set(full.flat());
     ev.lines = full.length; ev.regions = full;
     if (piece.bombIdx >= 0) for (const j of around((r0 + piece.cells[piece.bombIdx][0]) * B + c0 + piece.cells[piece.bombIdx][1])) if (b[j]) { ev.bombed.push(j); seeds.add(j); }
@@ -308,7 +308,7 @@
   const worldOf = (n) => Math.floor(n / 10) % WORLDS.length;
   // Move budgets for levels 1-100: the 75th percentile of the words a greedy bot needed (8 letter seeds per level, 0 = joker level).
   // Regenerate with `node test.js --calibrate` after changing level generation, an obstacle rule or the word list.
-  const MOVES = [7, 7, 7, 7, 7, 7, 0, 8, 7, 8, 7, 7, 8, 0, 7, 7, 7, 7, 7, 7, 8, 10, 7, 7, 8, 7, 7, 0, 10, 7, 9, 7, 7, 7, 0, 12, 7, 8, 7, 7, 7, 0, 8, 7, 9, 8, 11, 8, 0, 7, 7, 7, 9, 9, 7, 0, 13, 9, 11, 7, 7, 11, 0, 11, 8, 8, 12, 7, 12, 0, 7, 8, 9, 10, 10, 12, 0, 11, 13, 13, 18, 12, 11, 0, 13, 14, 10, 13, 13, 7, 7, 13, 9, 8, 11, 8, 8, 0, 7, 15];
+  const MOVES = [7, 10, 7, 7, 8, 8, 0, 7, 8, 8, 7, 7, 8, 0, 7, 8, 7, 7, 7, 7, 8, 10, 7, 7, 7, 7, 7, 0, 9, 7, 9, 7, 8, 7, 0, 11, 7, 10, 7, 7, 7, 0, 8, 7, 11, 8, 13, 10, 0, 9, 7, 7, 10, 9, 7, 0, 14, 9, 11, 7, 7, 14, 0, 12, 10, 8, 10, 7, 12, 0, 7, 11, 10, 12, 12, 14, 0, 15, 12, 17, 18, 17, 12, 0, 15, 14, 13, 16, 10, 7, 7, 16, 9, 8, 13, 12, 8, 0, 7, 17];
   const botMoves = (n) => MOVES[n % 100] || 20;
   const SIZE = { kutuk: [6, 10], akrep: [2, 4], yengec: [3, 6], lav: [4, 8], buz: [3, 6], hayalet: [2, 4], tomurcuk: [6, 10], dinamit: [3, 5], cekirdek: [2, 4], bosluk: [2, 4] }; // cells: [a world's early levels, cap]
   const obCount = (kind, n) => Math.min(SIZE[kind][1], SIZE[kind][0] + Math.floor((n % 10) / 3) + Math.floor(n / 100));
@@ -332,11 +332,11 @@
   // Hand-made opening in the forest: gentle, but every level already mixes goals
   const EARLY = [
     [["kutuk", 6]],
-    [["crystal", 4], ["kutuk", 4]],
+    [["crystal", 3], ["kutuk", 4]],
     [["long", 2], ["kutuk", 4]],
     [["bomb", 2], ["kutuk", 4]],
-    [["crystal", 5], ["long", 2]],
-    [["kutuk", 6], ["crystal", 4], ["bomb", 2]],
+    [["crystal", 4], ["long", 2]],
+    [["kutuk", 6], ["crystal", 3], ["bomb", 2]],
   ];
   const SCORE_PER_WORD = 42; // median points per word + placement on joker levels, measured with the bot
   const isJoker = (n) => n >= 6 && n % 7 === 6 && n % 10 !== 0; // never on a world's first level: that one introduces the obstacle
@@ -352,7 +352,7 @@
     else if (n % 10 === 0) plan = [[ob, obCount(ob, n)]]; // a world's first level shows its obstacle alone
     else {
       const extra = shuffle(["crystal", "long", ...(n >= 8 ? ["bomb"] : [])], r), withOb = r() < 0.8, total = n >= 15 && r() < 0.5 ? 3 : 2;
-      const size = { crystal: Math.min(8, 5 + Math.floor(n / 25)), long: Math.min(5, 3 + Math.floor(n / 30)), bomb: Math.min(4, 2 + Math.floor(n / 35)) };
+      const size = { crystal: Math.min(6, 3 + Math.floor(n / 25)), long: Math.min(5, 3 + Math.floor(n / 30)), bomb: Math.min(4, 2 + Math.floor(n / 35)) };
       plan = [...(withOb ? [[ob, obCount(ob, n)]] : []), ...extra.slice(0, total - (withOb ? 1 : 0)).map((t) => [t, size[t]])];
     }
     const goals = [], rise = riseOf(n);
@@ -377,9 +377,9 @@
   const wordPoints = (word, piece, chain = 1) => word.length * 3 * 2 ** piece.gold * chain + (word.length >= 5 ? 15 : 0);
   const clearPoints = (res, combo = 1) => (res.lines ? 20 * res.lines * res.lines * Math.max(1, combo) : 0) + res.bombed.length * 5 + res.broken.length * 10 + res.blasts.length * 15;
   // Goal progress: what a word earns by itself, what its placement earns on the board, and both together (for the bot)
-  const wordProgress = (word, piece) => ({ crystal: piece.crystals, long: word.length >= 5 ? 1 : 0, bomb: piece.bombIdx >= 0 ? 1 : 0 });
+  const wordProgress = (word, piece) => ({ long: word.length >= 5 ? 1 : 0, bomb: piece.bombIdx >= 0 ? 1 : 0 });
   function boardProgress(res) {
-    const p = {};
+    const p = res.gems.length ? { crystal: res.gems.length } : {};
     for (const x of res.broken) p[x.ob] = (p[x.ob] || 0) + 1;
     for (const i of res.cracked) { const k = res.board[i] ? res.board[i].ob : "buz"; p[k] = (p[k] || 0) + 1; } // a crack is a hit; a cell cracked and then broken in one turn counts both
     if (p.lav && !has(res.board, "lav")) p.lav = 999; // the last lava is out: that goal is done however many were asked for
@@ -390,9 +390,9 @@
   function bestMove(grid, board, open = {}, find = findWords) { // find: findWords, or findChains in the wordless mode
     // Filling a row, column or box that holds a wanted obstacle (or runs right beside one: the splash) sets up a clear, the way a person
     // would; the fuller that region already is, the more a cell in it is worth.
-    const want = (v) => v && v.ob && (open[v.ob] || (v.ob === "jenerator" && open.cekirdek)), worth = new Array(B * B).fill(0);
+    const want = (v) => v && (v.ob ? open[v.ob] || (v.ob === "jenerator" && open.cekirdek) : v.gem && open.crystal), worth = new Array(B * B).fill(0);
     for (const reg of REGIONS) {
-      const direct = reg.some((i) => want(board[i])), near = !direct && reg.some((i) => orth(i).some((j) => want(board[j]) && !OBST[board[j].ob].armor));
+      const direct = reg.some((i) => want(board[i])), near = !direct && reg.some((i) => orth(i).some((j) => want(board[j]) && board[j].ob && !OBST[board[j].ob].armor));
       if (!direct && !near) continue;
       const share = (direct ? 1 : 0.6) * (0.6 + reg.reduce((a, i) => a + (board[i] ? 1 : 0), 0) / 4);
       for (const i of reg) worth[i] += share;
@@ -404,7 +404,7 @@
         if (!canPlace(board, piece, r, c)) continue;
         const res = place(board, piece, r, c, 0);
         let score = res.lines * 20 + res.bombed.length + word.length - piece.cells.length * 0.5 - res.stings * 30
-          + (open.crystal ? piece.crystals * 35 : 0) + (open.long && word.length >= 5 ? 30 : 0) + (open.bomb && piece.bombIdx >= 0 ? 35 : 0);
+          + (open.crystal ? res.gems.length * 40 + piece.gems.length * 10 : 0) + (open.long && word.length >= 5 ? 30 : 0) + (open.bomb && piece.bombIdx >= 0 ? 35 : 0);
         for (const x of res.broken) score += open[x.ob] ? 40 : x.ob === "jenerator" && open.cekirdek ? 30 : 5;
         score += res.cracked.length * (open.buz ? 15 : 2);
         for (const a of res.acts) score -= a.type === "spread" ? 6 : a.type === "eat" ? 4 : 0;

@@ -99,6 +99,8 @@ main { position: relative; z-index: 1; max-width: 430px; margin: 0 auto; display
 .cell > b { display: block; position: relative; width: 100%; height: 100%; border-radius: 6px; background: #E3E6F2; will-change: transform; box-shadow: inset 0 2px 3px rgba(38,33,80,.08); }
 .cell.bx > b { background: #D3D8EA; }
 .cell.on > b { box-shadow: inset 0 -3px 0 rgba(0,0,0,.2), inset 0 2px 0 rgba(255,255,255,.35); }
+/* a block cell that carries a crystal: collected when the cell is cleared */
+.cell.gem > b::after, .mini i.gem::after, .drag i.gem::after { content: ""; position: absolute; inset: 10%; background: var(--gem) center/contain no-repeat; }
 .cell.ghost > b { outline: 2px dashed var(--blue); outline-offset: -2px; background: #C2D2FF; }
 .cell.suggest > b { box-shadow: inset 0 0 0 3px var(--green); }
 /* obstacles: an icon from scenes.js fills the cell; a few states sit on top */
@@ -338,8 +340,9 @@ button.pill { cursor: pointer; } .pill svg { width: 18px; height: 18px; } .pill 
 .tile.hue.gold { box-shadow: 0 0 0 3px #FFE08A, 0 0 12px 2px rgba(255,201,60,.9), 0 3px 0 rgba(0,0,0,.28); }
 .tile.hue.gold::before { content: "×2"; position: absolute; top: -5px; left: -3px; padding: 0 5px; border-radius: 999px; background: #FFC93C; color: #3A2600; font: 700 .62rem/1.5 var(--ui); text-shadow: none; }
 .tile.hue.crystal { box-shadow: 0 0 0 3px #fff, 0 0 0 5px #6D28D9, 0 3px 0 rgba(0,0,0,.28); }
+:root { --gem: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11.5' fill='%23fff'/%3E%3Cpath d='M12 3.5l6 6-6 11-6-11z' fill='%23B57BFF' stroke='%236D28D9' stroke-width='1.6' stroke-linejoin='round'/%3E%3Cpath d='M6 9.5h12' stroke='%236D28D9' stroke-width='1.2'/%3E%3C/svg%3E"); }
 /* Renk mod: a crystal or bomb wears its own badge, so it reads on every colour (the ring alone vanished on purple) */
-.tile.hue.crystal::before, .tile.hue.bomb::before { content: ""; position: absolute; top: -6px; left: -5px; width: 46%; aspect-ratio: 1; min-width: 15px; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11.5' fill='%23fff'/%3E%3Cpath d='M12 3.5l6 6-6 11-6-11z' fill='%23B57BFF' stroke='%236D28D9' stroke-width='1.6' stroke-linejoin='round'/%3E%3Cpath d='M6 9.5h12' stroke='%236D28D9' stroke-width='1.2'/%3E%3C/svg%3E") center/contain no-repeat; filter: drop-shadow(0 1px 1px rgba(0,0,0,.35)); z-index: 2; }
+.tile.hue.crystal::before, .tile.hue.bomb::before { content: ""; position: absolute; top: -6px; left: -5px; width: 46%; aspect-ratio: 1; min-width: 15px; background: var(--gem) center/contain no-repeat; filter: drop-shadow(0 1px 1px rgba(0,0,0,.35)); z-index: 2; }
 .tile.hue.bomb::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11.5' fill='%23FF5A4F'/%3E%3Ccircle cx='11' cy='13.5' r='5.6' fill='%232B2240'/%3E%3Cpath d='M14.6 9.6l2.4-2.4' stroke='%232B2240' stroke-width='2'/%3E%3Ccircle cx='17.8' cy='6.4' r='1.6' fill='%23FFE08A'/%3E%3C/svg%3E"); }
 .tile.hue.bomb { box-shadow: 0 0 0 3px #FF5A4F, 0 3px 0 rgba(0,0,0,.28); }
 /* Klasik: the level clock, and a level's first ten */
