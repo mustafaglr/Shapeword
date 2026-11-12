@@ -11,7 +11,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, RM ? 0 : ms));
 const anim = (el, kf, o) => { const opts = RM ? { ...o, duration: 1, delay: 0 } : o;
   return Promise.race([el.animate(kf, opts).finished.catch(() => {}), new Promise((r) => setTimeout(r, (opts.duration || 0) + (opts.delay || 0) + 150))]); };
 const snd = window.Sfx || { unlock() {}, set() {}, setWorld() {}, play() {}, ob() {} }; // without sounds.js the game is simply silent
-const COLORS = ["#F25F5C", "#FFB627", "#2EC4B6", "#4D7CFE", "#9B5DE5"];
+const COLORS = ["#F25F5C", "#FFB627", "#2EC4B6", "#4D7CFE", "#9B5DE5"], STONE = "#8C8499"; // STONE: the rising floor's cells
 // letter-field colours per world, in Core.WORLDS order; joker levels use a rainbow
 const THEMES = [["#2E8B47", "#8CCB5C"], ["#C9711C", "#F2C46D"], ["#1A6FB8", "#4FC3EA"], ["#8A2A16", "#E8692C"], ["#4A82B8", "#A9D6F5"],
   ["#2A2470", "#6A5AE0"], ["#C2457E", "#F7A8C9"], ["#9A4A1C", "#E3955A"], ["#1C2A6B", "#5B7BE8"], ["#1A0B2E", "#8A2BE2"]];
@@ -58,6 +58,8 @@ const ICONS = {
   help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7M12 17h.01"/>',
   lock: '<rect x="5" y="11" width="14" height="10" rx="2" fill="currentColor" stroke="none"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
   edit: '<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  shop: '<path d="M5 8h14l-1.2 11.2a2 2 0 0 1-2 1.8H8.2a2 2 0 0 1-2-1.8zM9 8V6.5a3 3 0 0 1 6 0V8"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
   quest: '<path d="M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/>',
   flame: '<path d="M12 3c1 3 4 4.5 4 8.5a4 4 0 0 1-8 0c0-1.5.6-2.5 1.5-3.5C9.5 9.5 11 8 12 3z" fill="currentColor" stroke="none"/>',
@@ -136,6 +138,7 @@ function rollWeek() { // a new league week has begun: last week's place pays Lig
   const rank = 1 + rivals.filter((p) => last(p) > w.pts).length, n = w.pts > 0 ? (rank === 1 ? (rivals.length ? 2 : 1) : rank <= 3 ? 1 : 0) : 0, m = meta();
   profile.prevWeek = { id: w.id, pts: w.pts, rank }; profile.week = { id: WEEK, pts: 0 };
   for (let i = 0; i < n; i++) (m.box ||= []).push("league");
+  if (n && !(m.own ||= []).includes("frame:sampiyon")) m.own.push("frame:sampiyon"); // the one frame no token can buy
   return n ? { rank, n, pts: w.pts } : null;
 }
 // league week, today's duel and the daily streak: the newer one wins, a tie keeps the bigger number
@@ -150,6 +153,7 @@ function mergeProfiles(a, b) { // same player on two devices: best result per le
   out.inv = (b.updated || 0) > (a.updated || 0) ? { ...b.inv } : { ...a.inv };
   out.week = newer(a.week, b.week, "id", "pts"); out.duel = newer(a.duel, b.duel, "date", "score"); out.streak = newer(a.streak, b.streak, "last", "n"); out.face = newer(a.face, b.face, "t", "t"); out.prevWeek = newer(a.prevWeek, b.prevWeek, "id", "pts");
   out.meta = !a.meta ? b.meta : !b.meta ? a.meta : (b.updated || 0) > (a.updated || 0) ? b.meta : a.meta; // tokens, trophies, chests: the device that played last knows best
+  if (out.meta) { const own = [...((a.meta || {}).own || []), ...((b.meta || {}).own || [])].filter((k) => typeof k === "string" && Meta.shopItem(...k.split(":"))); out.meta = { ...out.meta, own: [...new Set(own)] }; } // a purchase is never lost to the other device
   out.updated = Math.max(a.updated || 0, b.updated || 0);
   return out;
 }
@@ -285,13 +289,16 @@ const AVATARS = { // id: [name, background, drawing]
 };
 const PIC_OK = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]{100,24000}$/; // a photo in the cloud save is someone else's data: nothing but a small picture may reach the page
 const LETTER_BG = ["#4D7CFE", "#E5534F", "#1FA97A", "#9B5DE5", "#E08A00", "#1AA3A3"];
+const ANIMAL_BG = "#DDEBFF";
 function avatar(p, cls = "") {
-  const f = (p && p.face) || {}, name = (p && p.name) || "?";
+  const f = (p && p.face) || {}, name = (p && p.name) || "?", fr = frameOf(p); if (fr) cls += " fr-" + fr;
   if (typeof f.pic === "string" && PIC_OK.test(f.pic)) return `<span class="ava ${cls}"><img src="${f.pic}" alt=""></span>`;
+  if (typeof f.kv === "string" && Meta.shopItem("ava", f.kv)) return `<span class="ava kv ${cls}" style="background:${ANIMAL_BG}"><img src="art/animals/${f.kv}.png" alt=""></span>`; // a cloud id reaches the page only if it is in the catalogue
   if (Object.keys(AVATARS).includes(f.av)) return `<span class="ava ${cls}" style="background:${AVATARS[f.av][1]}">${AVATARS[f.av][2]}</span>`;
   const bg = LETTER_BG[[...name].reduce((s, ch) => s + ch.codePointAt(0), 0) % LETTER_BG.length];
   return `<span class="ava ${cls}" style="background:${bg}">${esc(up([...name][0] || "?"))}</span>`;
 }
+function frameOf(p) { const m = p && p.meta, id = m && typeof m === "object" && m.look && m.look.frame; return typeof id === "string" && id !== "yok" && Meta.shopItem("frame", id) ? id : ""; }
 async function photoFace(file) { // any picture becomes a small square JPEG; the original never leaves the device
   const url = URL.createObjectURL(file);
   try {
@@ -307,13 +314,54 @@ function paintFaces() { // the picker on the settings card: the letter, the char
   const f = profile.face || {}, known = Object.keys(AVATARS).includes(f.av), hasPic = typeof f.pic === "string" && PIC_OK.test(f.pic);
   $("s-faces").innerHTML = `<button class="face" data-av="" aria-pressed="${!hasPic && !known}" aria-label="İsmimin baş harfi">${avatar({ name: profile.name })}</button>`
     + Object.entries(AVATARS).map(([k, a]) => `<button class="face" data-av="${k}" aria-pressed="${!hasPic && f.av === k}" aria-label="${a[0]}">${avatar({ face: { av: k } })}</button>`).join("")
+    + Object.keys(Meta.SHOP.ava[1]).filter((k) => owns("ava", k)).map((k) => `<button class="face" data-kv="${k}" aria-pressed="${!hasPic && f.kv === k}" aria-label="${Meta.SHOP.ava[1][k][0]}">${avatar({ face: { kv: k } })}</button>`).join("")
     + `<button class="face" id="s-photo" aria-pressed="${hasPic}" aria-label="Fotoğraf seç">${hasPic ? avatar(profile) : `<span class="ava cam">${svgIcon(ICONS.camera)}</span>`}</button>`;
   $("s-faces").querySelectorAll("[data-av]").forEach((b) => (b.onclick = () => { setFace(b.dataset.av ? { av: b.dataset.av } : {}); paintFaces(); }));
+  $("s-faces").querySelectorAll("[data-kv]").forEach((b) => (b.onclick = () => { setFace({ kv: b.dataset.kv }); paintFaces(); }));
   $("s-photo").onclick = () => $("s-file").click();
+}
+
+// ---- shop: tokens buy characters, avatar frames, letter and block looks; what is bought stays (meta.own), what is worn is meta.look ----
+const SHOP_OFFERS = Meta.offersFor(Core.rngFrom(TODAY + ":shop"));
+const owns = (cat, id) => { const it = Meta.shopItem(cat, id); return !!it && (it[1] === 0 || isAdmin() || (meta().own || []).includes(cat + ":" + id)); };
+const lookOf = (cat) => { const l = meta().look || {}, id = l[cat]; return id && owns(cat, id) ? id : cat === "frame" ? "yok" : "klasik"; };
+function applyLook() { // the letter skin is a body class; the block palette repaints the shared colour list in place
+  if (!profile) return;
+  document.body.className = document.body.className.replace(/\bts-\w+/g, "").trim(); document.body.classList.add("ts-" + lookOf("tiles"));
+  COLORS.splice(0, COLORS.length, ...Meta.PALETTES[lookOf("blocks")]);
+}
+function wear(cat, id) { const m = meta(); if (cat === "ava") setFace({ kv: id }); else { m.look = { ...(m.look || {}), [cat]: id }; saveProfile(); } applyLook(); }
+function shopPreview(cat, id) {
+  if (cat === "ava") return avatar({ face: { kv: id } });
+  if (cat === "frame") return avatar({ ...profile, meta: { look: { frame: id } } });
+  if (cat === "tiles") return `<span class="skinprev ts-${id}">${["Ş", "E", "K"].map((ch) => `<span class="tile mini"><span>${ch}</span></span>`).join("")}</span>`;
+  return `<span class="palprev">${Meta.PALETTES[id].map((c) => `<i style="background:${c}"></i>`).join("")}</span>`;
+}
+function shopCard(cat = "ava", pick = null) {
+  const items = Meta.SHOP[cat][1], m = meta();
+  const cell = (c, id, deal) => { const it = Meta.shopItem(c, id), have = owns(c, id), price = Meta.priceOf(c, id, SHOP_OFFERS), on = c === "ava" ? (profile.face || {}).kv === id : lookOf(c) === id;
+    return `<button class="shopitem${pick === c + ":" + id ? " picked" : ""}${on ? " on" : ""}" data-k="${c}:${id}" aria-label="${it[0]}">${shopPreview(c, id)}<span>${it[0]}</span>
+      <b>${on ? "Kullanılıyor" : have ? "Senin" : price == null ? "Lig ödülü" : `${deal ? `<s>${it[1]}</s>` : ""}${COIN}${price}`}</b></button>`; };
+  const [pc, pid] = (pick || "").split(":"), pIt = pick && Meta.shopItem(pc, pid), pPrice = pIt && Meta.priceOf(pc, pid, SHOP_OFFERS);
+  const action = !pIt ? `<p class="hint">Bir şeye dokun: önce görürsün, sonra alırsın. Aldığın her şey hep senin kalır.</p>`
+    : owns(pc, pid) ? `<button class="b3 blue" id="sh-wear">${pIt[0]}: kullan</button>`
+    : pPrice == null ? `<p class="hint">Şampiyon çerçevesi satılmaz: haftalık ligi ilk 3'te bitiren kazanır.</p>`
+    : `<button class="b3 green" id="sh-buy"${canPay(pPrice) ? "" : " disabled"}>${COIN}${pPrice} · ${pIt[0]} al</button>${canPay(pPrice) ? "" : `<p class="hint">${pPrice - m.tokens} jeton daha lazım. Bölüm geç, sandık aç, görev bitir.</p>`}`;
+  card(`<h2>Mağaza</h2>${purse()}
+    <div class="deals"><h3>Günün fırsatları · %${Meta.OFFER_OFF * 100} indirim</h3><div class="shopgrid">${SHOP_OFFERS.map((k) => cell(...k.split(":"), true)).join("")}</div></div>
+    <div class="tabs" id="sh-tabs" role="tablist">${Object.entries(Meta.SHOP).map(([k, v]) => `<button role="tab" data-c="${k}" aria-selected="${k === cat}">${v[0]}</button>`).join("")}</div>
+    <div class="shopgrid scroll">${Object.keys(items).map((id) => cell(cat, id, false)).join("")}</div>
+    ${action}<button class="b3 ghost" id="sh-close">Kapat</button>`);
+  $("ov").querySelectorAll("#sh-tabs button").forEach((b) => (b.onclick = () => { snd.play("toggle"); shopCard(b.dataset.c); }));
+  $("ov").querySelectorAll(".shopitem").forEach((b) => (b.onclick = () => { snd.play("toggle"); const [c] = b.dataset.k.split(":"); shopCard(c === cat ? cat : c, b.dataset.k); }));
+  if ($("sh-wear")) $("sh-wear").onclick = () => { wear(pc, pid); snd.play("gift"); shopCard(pc); };
+  if ($("sh-buy")) $("sh-buy").onclick = () => { if (!spend(pPrice)) return; (m.own ||= []).push(pick); wear(pc, pid); confetti(); snd.play("gift"); toast(`${pIt[0]} artık senin`); shopCard(pc); };
+  $("sh-close").onclick = () => { closeCard(); renderLanding(); };
 }
 
 // ---- chests, quests, the weekly prize ----
 const COIN = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="#FFC93C" stroke="#C98A00" stroke-width="1.6"/><circle cx="12" cy="12" r="5.8" fill="none" stroke="#E0A200" stroke-width="1.5"/><path d="M8.6 7.6a6 6 0 0 1 3.4-1.4" stroke="#FFF6D0" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg>';
+const CROWN = '<svg viewBox="0 0 24 24"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z" fill="#FFC93C" stroke="#8A5A00" stroke-width="1.5" stroke-linejoin="round"/></svg>';
 const CUP = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10v5a5 5 0 0 1-10 0z" fill="#FFC93C" stroke="#C98A00" stroke-width="1.5" stroke-linejoin="round"/><path d="M7 5.5H4.2v1.2A3.3 3.3 0 0 0 7.3 10M17 5.5h2.8v1.2a3.3 3.3 0 0 1-3.1 3.3M12 14v3.5M8.5 20h7" stroke="#C98A00" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>';
 const tierBadge = (t) => `<svg class="tierb" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l8 3v6c0 5-3.5 8.6-8 11-4.5-2.4-8-6-8-11V5z" fill="${Meta.TIERS[t][2]}" stroke="rgba(0,0,0,.28)" stroke-width="1"/><path d="M12 6.5l1.6 3.3 3.6.5-2.6 2.5.6 3.6L12 14.7l-3.2 1.7.6-3.6-2.6-2.5 3.6-.5z" fill="#fff" opacity=".92"/></svg>`;
 const CHEST_ART = '<svg viewBox="0 0 120 110" aria-hidden="true"><circle class="glow" cx="60" cy="52" r="46"/><g class="lid"><path d="M14 46V34a22 22 0 0 1 22-22h48a22 22 0 0 1 22 22v12z" fill="var(--c1)"/><path d="M14 40h92v6H14z" fill="var(--c2)"/><path d="M28 13.5h8V46h-8zM84 13.5h8V46h-8z" fill="var(--c2)" opacity=".55"/></g><path d="M14 46h92v44a8 8 0 0 1-8 8H22a8 8 0 0 1-8-8z" fill="var(--c1)"/><path d="M14 46h92v8H14z" fill="var(--c2)"/><path d="M28 46h8v52h-8zM84 46h8v52h-8z" fill="var(--c2)" opacity=".55"/><g class="lock"><rect x="50" y="40" width="20" height="24" rx="5" fill="#FFE08A" stroke="#B8801A" stroke-width="2"/><circle cx="60" cy="50" r="3" fill="#7A4A00"/><path d="M60 51v6" stroke="#7A4A00" stroke-width="2.5" stroke-linecap="round"/></g></svg>';
@@ -347,7 +395,10 @@ function weekPrize() { // shown on the first visit of a new week
   if (!profile || $("landing").hidden || !$("ov").hidden) return false;
   const r = rollWeek(); if (!r) return false;
   saveProfile();
-  card(`<span class="badge">Haftalık lig</span><h2>Geçen hafta ${r.rank}. oldun</h2><p>${r.pts} puanla ${r.n > 1 ? "iki Lig sandığı" : "bir Lig sandığı"} kazandın.</p><button class="b3 xl" id="w-open">Sandığı aç</button>`);
+  card(`<span class="badge">Haftalık lig bitti</span><div class="bigrank">${r.rank}.</div><h2>${r.rank === 1 ? "Şampiyonsun!" : "Podyumdasın!"}</h2>
+    <div class="weekava">${avatar({ ...profile, meta: { look: { frame: "sampiyon" } } })}</div>
+    <p>${r.pts} puanla ${r.n > 1 ? "iki Lig sandığı" : "bir Lig sandığı"} ve <strong>Şampiyon çerçevesi</strong> kazandın. Çerçeveyi Mağaza'dan takabilirsin.</p><button class="b3 xl" id="w-open">Sandığı aç</button>`);
+  confetti(); snd.play("record");
   $("w-open").onclick = () => chestCard("league");
   return true;
 }
@@ -389,6 +440,7 @@ function landing() {
 const streakOn = () => profile.streak && (profile.streak.last === TODAY || profile.streak.last === YESTERDAY);
 function renderLanding() {
   if ($("landing").hidden || !profile) return;
+  applyLook();
   const n = nextLevel(), w = worldOf(n), m = meta(), cups = cupsOf(profile), t = Meta.tierOf(cups), pend = pendingChests(), freeLeft = m.freeAt - Date.now(), ws = Math.min(Meta.STREAK.length, m.ws || 0);
   const qGot = QUEST_KEYS.filter((k) => m.q.got[k]).length, qReady = QUEST_KEYS.some((k) => !m.q.got[k] && (m.q.p[k] || 0) >= Meta.QUESTS[k][1]);
   const inbox = duelsOf().filter((d) => d.b === profile.id && d.sb == null).length;
@@ -405,11 +457,11 @@ function renderLanding() {
     </div>
     <div class="tiles">
       <button class="tilebtn" id="l-map">${svgIcon(ICONS.map)}Harita</button><button class="tilebtn" id="l-duel">${svgIcon(ICONS.duel)}Düello${inbox ? `<i class="dot" aria-label="${inbox} meydan okuma">${inbox}</i>` : ""}</button>
-      <button class="tilebtn" id="l-rank">${svgIcon(ICONS.rank)}Sıralama</button><button class="tilebtn" id="l-help">${svgIcon(ICONS.help)}Nasıl?</button>
+      <button class="tilebtn" id="l-rank">${svgIcon(ICONS.rank)}Sıralama</button><button class="tilebtn" id="l-shop">${svgIcon(ICONS.shop)}Mağaza</button><button class="tilebtn" id="l-help">${svgIcon(ICONS.help)}Nasıl?</button>
     </div>
     <p class="cloudline">${streakOn() ? `${profile.streak.n} günlük seri · ` : ""}${cloudInfo}</p>`;
   homeScene(w);
-  $("l-face").onclick = settings; $("l-go").onclick = () => intro(n); $("l-map").onclick = openMap; $("l-duel").onclick = duelHub; $("l-help").onclick = () => helpCard(null); $("l-rank").onclick = () => rankCard();
+  $("l-face").onclick = settings; $("l-go").onclick = () => intro(n); $("l-map").onclick = openMap; $("l-duel").onclick = duelHub; $("l-help").onclick = () => howTo(); $("l-rank").onclick = () => rankCard(); $("l-shop").onclick = () => shopCard();
   $("l-tier").onclick = () => rankCard("cups"); $("l-quest").onclick = questCard;
   $("l-free").onclick = () => (meta().freeAt <= Date.now() ? chestCard("free") : toast(`Bedava sandık ${hms(meta().freeAt - Date.now())} sonra açılır`));
   $("l-box").onclick = () => { const k = pendingChests()[0]; if (k) chestCard(k); else toast(`Yıldız sandığına ${Meta.STAR_STEP - (totalStars() % Meta.STAR_STEP)} yıldız kaldı`); };
@@ -427,47 +479,68 @@ function dailyReward() {
   $("d-take").onclick = () => { gifts.forEach((k) => inv()[k]++); profile.streak = { last: TODAY, n }; saveProfile(); snd.play("gift"); confetti(); closeCard(); renderLanding(); };
 }
 // ---- ranking: this week's league, today's duel, all-time stars ----
+// ---- rankings: a podium for the top three, the league's prize zone and countdown, the trophy road ----
+function weekLeft() { const end = new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate() + 7 - ((NOW.getDay() + 6) % 7)), ms = end - Date.now(), d = Math.floor(ms / 864e5), h = Math.floor((ms % 864e5) / 36e5); return d ? `${d} gün ${h} saat` : `${h} saat`; }
+function podium(rows, fmt) { // 2nd, 1st, 3rd on stands of three heights
+  const at = [1, 0, 2].map((i) => rows[i]).filter(Boolean); if (!at.length) return "";
+  return `<div class="podium">${[1, 0, 2].map((i) => rows[i] ? `<div class="pd p${i + 1}${rows[i].p.id === profile.id ? " me" : ""}">${avatar(rows[i].p)}<span>${esc(rows[i].p.name)}</span><b>${fmt(rows[i].v)}</b><i>${i + 1}</i></div>` : `<div class="pd p${i + 1} empty"><i>${i + 1}</i></div>`).join("")}</div>`;
+}
+function trophyRoad(cups) { // the tiers as a road: where you are, how far the next one is
+  const t = Meta.tierOf(cups), T = Meta.TIERS, next = T[t + 1], into = next ? (cups - T[t][1]) / (next[1] - T[t][1]) : 1;
+  return `<div class="road">${T.map((x, i) => `<div class="rn${i < t ? " done" : i === t ? " here" : ""}">${tierBadge(i)}<small>${x[0]}</small><em>${x[1]}</em></div>`).join("")}
+    <div class="roadbar"><i style="width:${((t + into) / (T.length - 1)) * 100}%"></i></div></div>
+    <p class="roadnote">${next ? `${CUP}${cups} kupa · ${next[0]} için ${next[1] - cups} kupa daha. Her yeni kademe bir Kademe sandığı verir.` : `${CUP}${cups} kupa · En üst kademedesin.`}</p>`;
+}
 function rankCard(tab = "week") {
-  const all = [...others(), ...(isAdmin() ? [] : [profile])], daysLeft = 7 - ((NOW.getDay() + 6) % 7);
+  const all = [...others(), ...(isAdmin() ? [] : [profile])];
   const views = {
-    week: { note: `Bu hafta kırdığın rekorlar lig puanı getirir. Bitmesine ${daysLeft} gün.`, empty: "Bu hafta henüz puan yok. Bir bölümde rekorunu geç ya da düello oyna.",
+    week: { note: `Rekor kırdıkça lig puanı toplarsın. İlk 3: Lig sandığı ve Şampiyon çerçevesi.`, empty: "Bu hafta henüz puan yok. Bir bölümde rekorunu geç ya da düello oyna.",
       rows: all.filter((p) => p.week && p.week.id === WEEK && p.week.pts > 0).map((p) => ({ p, v: p.week.pts, sub: `★ ${totalStars(p)}` })) },
-    duel: { note: "Bugünkü Günlük Düello puanları. Herkes aynı harflerle oynar.", empty: "Bugün henüz düello oynayan yok. İlk sen ol.",
+    duel: { note: "Günün turnuvası: herkes aynı harflerle oynar.", empty: "Bugün henüz düello oynayan yok. İlk sen ol.",
       rows: all.filter((p) => p.duel && p.duel.date === TODAY && p.duel.score > 0).map((p) => ({ p, v: p.duel.score, sub: "" })) },
-    cups: { note: "Düellolarda kazanılan kupalara göre. Kupalar kademeni belirler.", empty: "Henüz kupası olan yok. Bir düello kazan.", rows: all.filter((p) => cupsOf(p) > 0).map((p) => ({ p, v: cupsOf(p), sub: Meta.TIERS[Meta.tierOf(cupsOf(p))][0] })) },
+    cups: { note: "", empty: "Henüz kupası olan yok. Bir düello kazan.", rows: all.filter((p) => cupsOf(p) > 0).map((p) => ({ p, v: cupsOf(p), sub: Meta.TIERS[Meta.tierOf(cupsOf(p))][0] })) },
     stars: { note: "Toplam yıldıza göre.", empty: "Henüz yıldız yok.", rows: all.map((p) => ({ p, v: totalStars(p), sub: `${nextLevel(p) + 1}. bölüm` })) },
-  }, view = views[tab], rows = view.rows.sort((a, b) => b.v - a.v), top = rows.slice(0, 8), mine = rows.find((r) => r.p.id === profile.id);
-  if (mine && !top.includes(mine)) top.push(mine);
+  }, view = views[tab], rows = view.rows.sort((a, b) => b.v - a.v), mine = rows.find((r) => r.p.id === profile.id), myAt = rows.indexOf(mine);
+  const rest = rows.slice(3, 10); if (mine && myAt >= 10) rest.push(mine);
+  const fmt = (v) => (tab === "stars" ? "★ " + v : String(v));
+  const chase = tab === "week" && mine && myAt >= 3 ? `<p class="chase">İlk 3'e ${rows[2].v - mine.v + 1} puan kaldı</p>` : tab === "week" && mine && myAt > 0 ? `<p class="chase">Birinciliğe ${rows[0].v - mine.v + 1} puan kaldı</p>` : "";
   card(`<h2>Sıralama</h2>
-    <div class="tabs" role="tablist">${[["week", "Haftalık"], ["duel", "Düello"], ["cups", "Kupa"], ["stars", "Yıldız"]].map(([k, t]) => `<button role="tab" data-t="${k}" aria-selected="${k === tab}">${t}</button>`).join("")}</div>
-    <p>${cloudPlayers ? view.note : "Bulut bağlı değil: yalnızca bu cihaz görünüyor."}</p>
-    <div class="lb">${top.map((r) => `<div class="${r.p.id === profile.id ? "me" : ""}"><span>${rows.indexOf(r) + 1}</span><span class="who">${avatar(r.p)}<span>${esc(r.p.name)}</span></span><small>${r.sub}</small><strong>${tab === "stars" ? "★ " : ""}${r.v}</strong></div>`).join("") || `<p>${view.empty}</p>`}</div>
+    <div class="tabs" role="tablist">${[["week", "Lig"], ["duel", "Turnuva"], ["cups", "Kupa"], ["stars", "Yıldız"]].map(([k, t]) => `<button role="tab" data-t="${k}" aria-selected="${k === tab}">${t}</button>`).join("")}</div>
+    ${tab === "week" ? `<div class="countdown">${svgIcon(ICONS.clock)}Lig bitimine ${weekLeft()}</div>` : ""}
+    ${tab === "cups" ? trophyRoad(cupsOf(profile)) : ""}
+    ${cloudPlayers ? (view.note ? `<p>${view.note}</p>` : "") : "<p>Bulut bağlı değil: yalnızca bu cihaz görünüyor.</p>"}
+    ${rows.length ? podium(rows, fmt) : `<p>${view.empty}</p>`}${chase}
+    ${rest.length ? `<div class="lb rest">${rest.map((r) => `<div class="${r.p.id === profile.id ? "me" : ""}"><span>${rows.indexOf(r) + 1}</span><span class="who">${avatar(r.p)}<span>${esc(r.p.name)}</span></span><small>${r.sub}</small><strong>${fmt(r.v)}</strong></div>`).join("")}</div>` : ""}
     <button class="b3 ghost" id="r-close">Kapat</button>`);
-  $("ov").querySelectorAll(".tabs button").forEach((b) => (b.onclick = () => rankCard(b.dataset.t)));
+  $("ov").querySelectorAll(".tabs button").forEach((b) => (b.onclick = () => { snd.play("toggle"); rankCard(b.dataset.t); }));
   $("r-close").onclick = closeCard;
 }
 $("gear").onclick = () => settings();
 
 // ---- settings (and the hidden admin tools) ----
+const togsHTML = (togs) => `<div class="togs">${togs.map(([k, t]) => `<button class="tog" data-p="${k}" aria-pressed="${prefs[k]}">${t}<i></i></button>`).join("")}</div>`;
+function bindTogs() {
+  $("ov").querySelectorAll(".tog").forEach((b) => (b.onclick = () => {
+    const k = b.dataset.p; prefs[k] = !prefs[k]; store.set("sw4:prefs", prefs); b.setAttribute("aria-pressed", prefs[k]); document.body.classList.toggle("cb", !!prefs.cb); snd.set(prefs); snd.play("toggle"); if (k === "vib") buzz(20);
+  }));
+}
 function settings() {
   const togs = [["sfx", "Ses efektleri"], ["amb", "Ortam sesi"], ["vib", "Titreşim"], ["cb", "Renk körü modu: ayırt edilir renkler, büyük şekiller"]];
   card(`<h2>Ayarlar</h2>
     <div class="faces" id="s-faces"></div><input type="file" id="s-file" accept="image/*" hidden>
     <p class="hint">Karakterin ya da fotoğrafının küçük bir kopyası sıralamada ve haritada diğer oyunculara görünür.</p>
-    <div class="togs">${togs.map(([k, t]) => `<button class="tog" data-p="${k}" aria-pressed="${prefs[k]}">${t}<i></i></button>`).join("")}</div>
+    ${togsHTML(togs)}
     <div style="text-align:left"><label for="s-name"><strong>İsim</strong></label></div>
     <input class="field-in" id="s-name" maxlength="16" value="${esc(profile.name)}">
     <button class="b3 blue" id="s-save">İsmi kaydet</button>
-    <p style="font-size:.78rem">${cloudInfo} · Sürüm ${window.SW_BUILD || "geliştirme"}</p>
+    <p style="font-size:.78rem">${cloudInfo} · Sürüm ${window.SW_BUILD || "geliştirme"} · Hayvan çizimleri: Kenney.nl (CC0)</p>
     ${isAdmin() ? `<div class="admin"><h3>Admin</h3><p>Tüm bölümler açık, güçlendiriciler sınırsız.</p>
       <div class="row2"><input class="field-in" id="a-lvl" type="number" min="1" value="${nextLevel() + 1}" aria-label="Bölüm numarası"><button class="b3 ghost" id="a-go">Bölüme git</button></div>
       <div class="row2"><button class="b3 ghost" id="a-cup">+100 kupa</button><button class="b3 ghost" id="a-chest">Sandığı hazırla</button></div><button class="b3 ghost" id="a-quest">Görevleri tamamla</button>
       <p>Buluttaki oyuncular: ${cloudPlayers ? Object.values(cloudPlayers).map((p) => `${esc(p.name)} (★${totalStars(p)})`).join(", ") || "yok" : "bağlantı yok"}</p></div>` : ""}
     <button class="b3 red" id="s-reset">İlerlemeyi sıfırla</button>
     <button class="b3 ghost" id="s-close">Kapat</button>`);
-  $("ov").querySelectorAll(".tog").forEach((b) => (b.onclick = () => {
-    const k = b.dataset.p; prefs[k] = !prefs[k]; store.set("sw4:prefs", prefs); b.setAttribute("aria-pressed", prefs[k]); document.body.classList.toggle("cb", !!prefs.cb); snd.set(prefs); snd.play("toggle"); if (k === "vib") buzz(20);
-  }));
+  bindTogs();
   paintFaces();
   $("s-file").onchange = async (e) => {
     const file = e.target.files[0]; e.target.value = ""; if (!file) return;
@@ -506,10 +579,10 @@ function openMap() {
   let html = Scenes.mapHTML ? Scenes.mapHTML(W, H, pts, spans) : Scenes.mapSVG(W, H, pts, spans);
   for (let w = 0; w < worlds; w++) html += `<div class="ribbon" style="top:${w === 0 ? H - 46 : spans[w].bottom}px">${w + 1}. dünya · ${Core.BIOMES[w % WN]}</div>`;
   for (let n = 0; n < lastShown; n++) {
-    const [x, y] = pts[n], s = profile.stars[n] || 0, open = unlocked(n), joker = Core.isJoker(n);
-    const cls = ["node", s ? "done" : "", joker && open ? "joker" : "", open ? "" : "locked", n === nx ? "current" : ""].filter(Boolean).join(" ");
+    const [x, y] = pts[n], s = profile.stars[n] || 0, open = unlocked(n), joker = Core.isJoker(n), boss = Core.isBoss(n);
+    const cls = ["node", s ? "done" : "", joker && open ? "joker" : "", boss ? "boss" : "", open ? "" : "locked", n === nx ? "current" : ""].filter(Boolean).join(" ");
     const starRow = s ? `<span class="nstars">${[1, 2, 3].map((k) => star(k <= s, 18)).join("")}</span>` : "";
-    html += `<button class="${cls}" style="left:${x}px;top:${y}px" data-n="${n}" ${open ? "" : "disabled"} aria-label="Bölüm ${n + 1}${joker ? ", joker bölümü" : ""}, ${open ? s + " yıldız" : "kilitli"}">${starRow}${open ? n + 1 : svgIcon(ICONS.lock)}</button>`;
+    html += `<button class="${cls}" style="left:${x}px;top:${y}px" data-n="${n}" ${open ? "" : "disabled"} aria-label="Bölüm ${n + 1}${joker ? ", joker bölümü" : boss ? ", patron bölümü" : ""}, ${open ? s + " yıldız" : "kilitli"}">${starRow}${boss ? `<span class="crown" aria-hidden="true">${CROWN}</span>` : ""}${open ? n + 1 : svgIcon(ICONS.lock)}</button>`;
   }
   const here = {}; // other players stand at the level they are on; a few may share one
   for (const p of others().sort((a, b) => totalStars(b) - totalStars(a)).slice(0, 12)) {
@@ -578,10 +651,11 @@ function playDemo() { // call once the card is on screen; it stops by itself whe
 function goalRows(L, left, brief) { // brief: the demo next to it does the explaining
   return `<div class="goallist">${L.goals.map((g) => { const o = goalOf(g.type); return `<div>${o.svg}<span><strong>${o.name}: ${left ? Math.max(0, left[g.type]) + " kaldı" : g.need}</strong>${brief ? "" : o.how}</span></div>`; }).join("")}</div>`;
 }
+const floorLine = (L) => (L.rise ? `<p class="floorline"><span class="floorchip">${UP}<span>${L.rise}</span></span>Taş zemin her ${L.rise} hamlede alttan bir sıra yükselir. Satır patlatıp geri it; yer kalmazsa bölüm biter.</p>` : "");
 function intro(n) {
   const L = Core.levelDef(n), theme = L.joker ? JOKER_THEME : THEMES[L.world], rec = recordOf(n), newWorld = n % 10 === 0 && n > 0, ws = L.joker ? 0 : Math.min(Meta.STREAK.length, meta().ws || 0);
-  card(`<div class="lvlhead">${L.joker ? `<span class="badge">Joker bölümü</span>` : newWorld ? `<span class="badge plain">Yeni dünya · yeni engel</span>` : ""}<h2>Bölüm ${n + 1}</h2><p>${L.joker ? "Bol joker ve altın harf, ekstra hediye" : `${L.biome} dünyası`} · ${L.moves} hamle</p></div>
-    ${n % 10 === 0 ? goalRows(L, null, true) + demoHTML(L.goals[0].type) : goalRows(L)}
+  card(`<div class="lvlhead">${L.joker ? `<span class="badge">Joker bölümü</span>` : newWorld ? `<span class="badge plain">Yeni dünya · yeni engel</span>` : L.boss ? `<span class="badge boss">Patron bölümü</span>` : ""}<h2>Bölüm ${n + 1}</h2><p>${L.joker ? "Bol joker ve altın harf, ekstra hediye" : `${L.biome} dünyası`} · ${L.moves} hamle</p></div>
+    ${n % 10 === 0 ? goalRows(L, null, true) + demoHTML(L.goals[0].type) : goalRows(L)}${floorLine(L)}
     <div class="stars">${[1, 2, 3].map((k) => star(k <= (profile.stars[n] || 0), 34)).join("")}</div>
     <button class="reclink" id="i-top" aria-label="Bu bölümün ilk 10'u">${CUP}${rec ? (rec.me ? `Rekor sende: ${rec.score} puan` : `Rekor: ${esc(rec.name)} · ${rec.score} puan`) : "Bu bölümde henüz rekor yok"} ›</button>
     ${ws ? `<p class="wsline">${svgIcon(ICONS.flame)}Galibiyet serisi ×${ws}: ${["joker", "joker ve altın harf", "joker, altın ve bomba harfi"][ws - 1]} ile başlıyorsun</p>` : "<p>Hepsini bitir ★★★ · %70 ★★ · %40 ★</p>"}
@@ -591,7 +665,7 @@ function intro(n) {
   const note = () => ($("i-note").textContent = { renk: "Renk: kelime yok. Aynı renkten en az 3 taşı birleştir, çizdiğin yol blok olsun. Rekor ve lig puanı yazılmaz.", rahat: "Rahat: yazabileceğin kelimeler gösterilir; dokununca harfleri parlar. Rekor ve lig puanı yazılmaz.", klasik: `Klasik: kelimeleri kendin bulursun. ${L.joker ? "" : `Üçüncü yıldız için ${mmss(Meta.parTime(L.moves))} içinde bitir. `}Rekor ve lig puanı yazılır.` }[prefs.mode]);
   $("i-mode").querySelectorAll("button").forEach((b) => (b.onclick = () => { prefs.mode = b.dataset.m; store.set("sw4:prefs", prefs); $("i-mode").querySelectorAll("button").forEach((x) => x.setAttribute("aria-selected", x === b)); note(); snd.play("toggle"); }));
   note(); $("i-top").onclick = () => levelTop(n);
-  $("i-go").onclick = () => startLevel(n); $("i-back").onclick = closeCard; playDemo();
+  $("i-go").onclick = () => (prefs.tut ? startLevel(n) : howTo(() => startLevel(n))); $("i-back").onclick = closeCard; playDemo();
 }
 const mmss = (s) => `${Math.floor(s / 60)}:${pad(Math.floor(s) % 60)}`;
 function levelTop(n) { // a level's first ten: stars, then the time of a full Klasik finish, then the score
@@ -602,20 +676,50 @@ function levelTop(n) { // a level's first ten: stars, then the time of a full Kl
     <button class="b3 ghost" id="t-back">Geri</button>`);
   $("t-back").onclick = () => intro(n);
 }
-function helpCard(L) {
-  if (G && !$("app").hidden) busy = true;
-  card(`<h2>${L ? "Bu bölümde" : "Nasıl oynanır?"}</h2>
-    ${L ? goalRows(L, G.left) + L.goals.map((g) => demoHTML(g.type)).join("") : ""}
-    <ol class="rules">
-      <li>Harf alanında yan yana, alt alta ya da çapraz duran harfleri kaydırarak 3–6 harfli bir kelime yaz. Her kelime 1 hamle.</li>
-      <li>Çizdiğin yol aynı şekilde bir blok olur ve aşağıdaki kutuya düşer. En fazla 3 blok tutabilirsin.</li>
-      <li>Bloğu sürükleyip tahtaya bırak. Dolu satır, sütun ve 3×3 kutular patlar; art arda patlatmak kombo yapar.</li>
-      <li>Özel harfler: altın puanı ikiye katlar, bomba 3×3 patlatır, joker her harfin yerine geçer, kristal hedeflerde toplanır.</li>
-      <li>Her dünyanın kendi engeli ve kendi kuralı var; bölüm kartı ne yapman gerektiğini söyler.</li>
-      <li>Hamlelerin bitmeden hedefleri tamamla: hepsi ★★★, %70'i ★★, %40'ı ★.</li>
-    </ol>
-    <button class="b3 blue" id="h-ok">Anladım</button>`);
-  $("h-ok").onclick = () => { closeCard(); if (G && !$("app").hidden) busy = false; };
+// ---- how to play: four short pictured steps instead of a page of rules; shown once before the first level ----
+const tutArt = (body) => `<svg class="tutart" viewBox="0 0 120 84" aria-hidden="true">${body}</svg>`;
+const TUT_PATH = [[0, 0], [0, 1], [1, 1], [2, 1]], TUT_WORD = "KEDİ"; // the word KEDİ, swiped as a hook shape
+function tutSteps(hues) {
+  const at = (r, c) => [24 + 36 * c, 14 + 28 * r], letters = ["KEA", "MDR", "LİS"], hue = ["#4D7CFE", "#F25F5C", "#2BC48A"];
+  const field = [0, 1, 2].flatMap((r) => [0, 1, 2].map((c) => {
+    const [x, y] = at(r, c), on = TUT_PATH.some(([a, b]) => a === r && b === c);
+    return hues ? `<circle cx="${x}" cy="${y}" r="11.5" fill="${on ? hue[0] : hue[(r + c) % 2 + 1]}"/>`
+      : `<circle cx="${x}" cy="${y}" r="11.5" fill="${on ? "#4D7CFE" : "#fff"}" stroke="#D9D3EE"/><text x="${x}" y="${y + 4.5}" text-anchor="middle" font-size="13" font-weight="700" fill="${on ? "#fff" : "#14112B"}" font-family="Fredoka, sans-serif">${letters[r][c]}</text>`;
+  })).join("");
+  const line = `<polyline class="tutline" points="${TUT_PATH.map(([r, c]) => at(r, c).join(",")).join(" ")}" fill="none" stroke="#FFC93C" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity=".85"/>`;
+  const block = TUT_PATH.map(([r, c], i) => `<rect x="${38 + 24 * c}" y="${6 + 24 * r}" width="22" height="22" rx="5" fill="#4D7CFE"/>${hues ? "" : `<text x="${49 + 24 * c}" y="${22 + 24 * r}" text-anchor="middle" font-size="11" font-weight="700" fill="#fff" font-family="Fredoka, sans-serif">${TUT_WORD[i]}</text>`}`).join("");
+  const cell = (x, y, fill, cls = "") => `<rect class="${cls}" x="${x}" y="${y}" width="17" height="17" rx="4" fill="${fill}"/>`;
+  const board = [0, 1, 2].flatMap((r) => [0, 1, 2, 3, 4, 5].map((c) => cell(9 + 17.5 * c, 26 + 18.5 * r, r === 2 && c !== 3 && c !== 4 ? "#9B5DE5" : "#E9E5F5", r === 2 && c !== 3 && c !== 4 ? "tutrow" : ""))).join("");
+  const drop = `<g class="tutdrop">${cell(9 + 17.5 * 3, 63, "#4D7CFE")}${cell(9 + 17.5 * 4, 63, "#4D7CFE")}</g>`;
+  const spec = [["tile gold", "A", "×2 puan"], ["tile bomb", "B", "3×3 patlar"], ["tile joker", "?", "her harf"], ["tile crystal", "K", "hedef"]];
+  return [
+    ["Kaydır", hues ? "Aynı renkten en az 3 taşı birleştir." : "Yan yana harfleri kaydırıp kelime yaz.", tutArt(line + field)],
+    ["Blok olur", "Çizdiğin yol aynı şekilde bir blok olur.", tutArt(block)],
+    ["Koy, patlat", "Bloğu tahtaya sürükle. Dolan satır, sütun ve 3×3 kutu patlar.", tutArt(board + drop)],
+    ["Hedefi bitir", "Hamlen bitmeden hedefleri tamamla. Tahtada yer kalmazsa bölüm biter.", `<div class="tutspec">${spec.map(([c, ch, t]) => `<div><span class="${c} mini"><span>${ch}</span></span><small>${t}</small></div>`).join("")}</div>`],
+  ];
+}
+function howTo(done, hues = prefs.mode === "renk") {
+  const inGame = G && !$("app").hidden; if (inGame) busy = true;
+  const steps = tutSteps(hues), finish = done || (() => { closeCard(); if (inGame) busy = false; });
+  const page = (k) => {
+    const [t, line, art] = steps[k], last = k === steps.length - 1;
+    card(`<h2>${t}</h2><div class="tutpic">${art}</div><p class="tutline-t">${line}</p>
+      <div class="tutdots">${steps.map((_, i) => `<i class="${i === k ? "on" : ""}"></i>`).join("")}</div>
+      <button class="b3 ${last ? "green" : "blue"}" id="h-next">${last ? "Anladım" : "İleri"}</button>${k ? `<button class="b3 ghost" id="h-prev">Geri</button>` : `<button class="b3 ghost" id="h-skip">Geç</button>`}`);
+    $("h-next").onclick = () => (last ? finish() : page(k + 1));
+    if (k) $("h-prev").onclick = () => page(k - 1); else $("h-skip").onclick = finish;
+  };
+  if (!prefs.tut) { prefs.tut = true; store.set("sw4:prefs", prefs); }
+  page(0);
+}
+function helpCard(L) { // in a level: just this level's goals; the rules are one tap further
+  if (!L) return howTo();
+  busy = true;
+  card(`<h2>Bu bölümde</h2>${goalRows(L, G.left, L.goals.every((g) => DEMOS[g.type]))}${floorLine(L)}${L.goals.map((g) => demoHTML(g.type)).join("")}
+    <button class="b3 blue" id="h-ok">Anladım</button><button class="b3 ghost" id="h-how">Nasıl oynanır?</button>`);
+  $("h-ok").onclick = () => { closeCard(); busy = false; };
+  $("h-how").onclick = () => howTo();
   playDemo();
 }
 $("help").onclick = () => G && helpCard(G.mode === "level" ? G.L : null);
@@ -625,7 +729,7 @@ function baseState(L, rnd, mode, hues = false) { // hues: the wordless mode, col
   M = hues ? 9 : 5; R = hues ? 6 : 5; Core.setSize(M, R);
   const left = Object.fromEntries(L.goals.map((g) => [g.type, g.need]));
   return { mode, L, rnd, hues, grid: Core.freshGrid(rnd, { rates: L.rates, ensure: Core.ensureFor(left), hues }), board: L.board.slice(), hand: [], score: 0, moves: L.moves, left, shown: { ...left },
-    combo: 0, chain: 0, lastWordAt: -1e9, colorTurn: 0, running: false, timeLeft: DUEL_SECONDS, extended: false, rival: null, extraMoves: 0, rec: null, passed: false, tickAt: 11 };
+    combo: 0, chain: 0, lastWordAt: -1e9, colorTurn: 0, running: false, timeLeft: DUEL_SECONDS, extended: false, rival: null, extraMoves: 0, rec: null, passed: false, tickAt: 11, floor: { wait: L.rise || 0, risen: L.risen || 0 } };
 }
 function startLevel(n) {
   abandon();
@@ -759,7 +863,25 @@ function buildBoard() {
     const r = (i / B) | 0, c = i % B, d = document.createElement("div");
     d.dataset.bx = (Math.floor(r / 3) + Math.floor(c / 3)) % 2; d.appendChild(document.createElement("b")); bd.appendChild(d); cellEls.push(d);
   }
-  paintBoard();
+  bd.insertAdjacentHTML("beforeend", `<div class="floorchip" id="floorchip" hidden></div>`);
+  paintBoard(); renderFloor();
+}
+const UP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
+function renderFloor() { // the rising floor's countdown, on the board's bottom edge
+  const el = $("floorchip"); if (!el) return; el.hidden = !(G && G.mode === "level" && G.L.rise);
+  if (el.hidden) return; const w = G.floor.wait;
+  el.innerHTML = `${UP}<span>${w}</span>`; el.classList.toggle("hot", w === 1); el.setAttribute("aria-label", `Taş zemin ${w} hamle sonra yükselir`); el.title = el.getAttribute("aria-label");
+}
+async function riseFloor() { // after a placement: the floor's count goes down; at zero a row of stone comes up from below
+  if (!(G.mode === "level" && G.L.rise)) return;
+  const fl = Core.floorTurn(G.board, G.floor, G.L.rise); G.floor = { wait: fl.wait, risen: fl.risen };
+  if (fl.rose) {
+    const fresh = fl.board.map((v, i) => (v && v.stone && !G.board[i] ? i : -1)).filter((i) => i >= 0);
+    G.board = fl.board; paintBoard(); snd.play("place"); buzz(18); shake(4);
+    fresh.forEach((i, j) => anim(cellEls[i].firstChild, [{ transform: "translateY(60%) scale(.6)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 300, delay: j * 30, easing: "ease-out" }));
+    await wait(300 + fresh.length * 30);
+  }
+  renderFloor(); if (G.floor.wait === 1) bump($("floorchip"));
 }
 function paintBoard() { shieldUp = G.board.some((v) => v && v.ob === "jenerator"); G.board.forEach((_, i) => paintCell(i)); }
 function paintCell(i, v = G.board[i]) {
@@ -767,7 +889,7 @@ function paintCell(i, v = G.board[i]) {
   if (v && v.ob) {
     d.className = `cell${bx} ob${v.off ? " off" : ""}${v.dir === -1 ? " flip" : ""}${v.ob === "cekirdek" && shieldUp ? " shielded" : ""}`; d.dataset.ob = v.ob; b.style.background = "";
     b.innerHTML = obIcon(v.ob === "buz" && v.hp === 1 ? "buzCrack" : v.ob) + (v.t ? `<em${v.t <= 2 ? ' class="hot"' : ""}>${v.t}</em>` : "");
-  } else { d.className = `cell${bx}${v ? " on" : ""}`; delete d.dataset.ob; b.innerHTML = ""; b.style.background = v ? COLORS[v.color] : ""; }
+  } else { d.className = `cell${bx}${v ? " on" : ""}${v && v.stone ? " stone" : ""}`; delete d.dataset.ob; b.innerHTML = ""; b.style.background = v ? (v.stone ? STONE : COLORS[v.color]) : ""; }
 }
 function setGhost(list, cls = "ghost") { ghostCells.forEach((i) => cellEls[i].classList.remove("ghost", "suggest")); ghostCells = list; list.forEach((i) => cellEls[i].classList.add(cls)); }
 
@@ -968,6 +1090,7 @@ async function placeBlock(k, p, at) {
   if (late.size) await ripple([...late], res, placed);
   bloom(res);
   settling = false; G.board = res.board; paintBoard(); renderHand(); renderTop(); if (G.mode === "duel") renderGoals();
+  await riseFloor();
   busy = false; afterTurn();
 }
 function cheer(res, p, at) { // everything you hear and feel when a placement clears something
@@ -1100,12 +1223,12 @@ function outOfMoves() {
 }
 function noRoom() {
   busy = true; snd.play("fail");
-  const canDiscard = G.hand.length > 0, s = G.mode === "level" ? Core.starsFor(G.L, G.left) : 0;
+  const stones = G.board.some((v) => v && v.stone), canDiscard = G.hand.length > 0, s = G.mode === "level" ? Core.starsFor(G.L, G.left) : 0, what = stones ? "en alttaki 2 taş sırasını kaldır" : canDiscard ? "bloklarını at" : "yeni harfler al";
   card(`<h2>Yer kalmadı</h2><p>Tahtada bu blokları koyacak yer yok.</p>${G.mode === "level" ? partialRows() : ""}
-    <button class="b3 xl" id="o-ad">▶ Reklam izle: ${canDiscard ? "bloklarını at" : "yeni harfler al"}</button>
-    ${canPay(Meta.COST.rescue) ? `<button class="b3 blue" id="o-tok">${COIN}${Meta.COST.rescue} jeton: ${canDiscard ? "bloklarını at" : "yeni harfler al"}</button>${purse()}` : ""}
+    <button class="b3 xl" id="o-ad">▶ Reklam izle: ${what}</button>
+    ${canPay(Meta.COST.rescue) ? `<button class="b3 blue" id="o-tok">${COIN}${Meta.COST.rescue} jeton: ${what}</button>${purse()}` : ""}
     ${G.mode === "duel" ? `<button class="b3 blue" id="o-end">Bitir</button>` : s ? `<button class="b3 green" id="o-take">${s} yıldızla bitir</button>` : `<button class="b3 blue" id="o-retry">Yeniden başla</button>`}<button class="b3 ghost" id="o-map">${G.mode === "duel" ? "Ana ekran" : "Harita"}</button>`);
-  const rescue = () => { if (canDiscard) { G.hand = []; renderHand(); } else { G.grid = Core.freshGrid(G.rnd, { rates: G.L.rates, ensure: Core.ensureFor(G.left), hues: G.hues }); respinTiles(); } afterTurn(); };
+  const rescue = () => { if (stones) { G.board = Core.sinkStones(G.board, 2); paintBoard(); } else if (canDiscard) { G.hand = []; renderHand(); } else { G.grid = Core.freshGrid(G.rnd, { rates: G.L.rates, ensure: Core.ensureFor(G.left), hues: G.hues }); respinTiles(); } afterTurn(); };
   $("o-ad").onclick = () => fakeAd(rescue);
   if ($("o-tok")) $("o-tok").onclick = () => { if (spend(Meta.COST.rescue)) { closeCard(); busy = false; lastTick = performance.now(); rescue(); } };
   if ($("o-end")) $("o-end").onclick = finishDuel; if ($("o-take")) $("o-take").onclick = () => levelEnd(s, false); if ($("o-retry")) $("o-retry").onclick = () => startLevel(G.L.n);
@@ -1243,6 +1366,18 @@ function duelHub() {
   $("ov").querySelectorAll("[data-foe]").forEach((b) => (b.onclick = () => startDuel("send", foes[+b.dataset.foe])));
   $("du-close").onclick = closeCard;
 }
-$("back").onclick = () => (G && G.mode === "duel" ? landing() : openMap());
+const leaveGame = () => (G && G.mode === "duel" ? landing() : openMap());
+function pauseCard() { // the ‹ button: sounds can be switched off mid-level, and leaving (which restarts the level) is a second, deliberate tap
+  if (!G || G.ended || busy) return leaveGame();
+  busy = true; const duel = G.mode === "duel", ws = !duel && G.score > 0 && meta().ws;
+  card(`<h2>Duraklatıldı</h2>${togsHTML([["sfx", "Ses efektleri"], ["amb", "Ortam sesi"], ["vib", "Titreşim"]])}
+    <button class="b3 xl" id="p-go">Devam et</button>
+    <button class="b3 ghost" id="p-out">${duel ? "Ana ekrana dön" : "Haritaya dön"}</button>
+    <p class="hint">${duel ? "Çıkarsan bu düello yarıda kalır." : `Çıkarsan bölüm baştan başlar${ws ? " ve galibiyet serin biter" : ""}.`}</p>`);
+  bindTogs();
+  $("p-go").onclick = () => { closeCard(); busy = false; lastTick = performance.now(); };
+  $("p-out").onclick = leaveGame;
+}
+$("back").onclick = pauseCard;
 
 landing();

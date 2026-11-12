@@ -61,8 +61,18 @@ for (let n = 0; n < 300; n++) {
   assert.deepStrictEqual(L, C.levelDef(n));
   assert(L.goals.length >= 1 && L.goals.every((g) => g.need > 0), `level ${n + 1} goals`);
   assert(!C.REGIONS.some((reg) => reg.every((i) => L.board[i])), `level ${n + 1} starts with a full region`);
-  for (const v of L.board) if (v) assert(v.ob === own || v.ob === C.OBST[own].shield, `level ${n + 1}: ${v.ob} outside its world`);
+  for (const v of L.board) if (v && !v.stone) assert(v.ob === own || v.ob === C.OBST[own].shield, `level ${n + 1}: ${v.ob} outside its world`);
   if (n % 10 === 0 && n) assert(L.goals.length === 1 && L.goals[0].type === own, `level ${n + 1} should introduce ${own}`);
+}
+{ // the rising floor: every `rise` placements stone fills the lowest row with room, leaving three gaps
+  const L = C.levelDef(19), stone = (b) => b.filter((v) => v && v.stone).length; assert(L.boss && L.rise === 2 && L.risen === 2 && stone(L.board) > 0);
+  assert(!C.levelDef(10).rise && !C.levelDef(5).rise && C.levelDef(12).rise === 3);
+  let f = { board: C.emptyBoard(), wait: 2, risen: 0 };
+  f = C.floorTurn(f.board, f, 2); assert(!f.rose && f.wait === 1);
+  f = C.floorTurn(f.board, f, 2); assert(f.rose && f.risen === 1 && stone(f.board.slice(72)) === 6 && stone(f.board) === 6, "the bottom row turns to stone but for three gaps");
+  const g = C.riseRow(f.board, 1); assert(stone(g.slice(63, 72)) === 6 && stone(g.slice(72)) === 6, "the next one goes a row up");
+  assert(C.riseRow(new Array(81).fill({ color: 1 }), 0) === null, "no room, no rise");
+  assert(stone(C.sinkStones(g, 1)) === 6 && stone(C.sinkStones(g, 2)) === 0, "the rescue sinks the lowest stone rows");
 }
 assert(C.isJoker(6) && C.isJoker(13) && !C.isJoker(20) && C.levelDef(6).goals[0].type === "score");
 assert.strictEqual(C.starsFor({ goals: [{ type: "kutuk", need: 10 }] }, { kutuk: 3 }), 2);
@@ -71,7 +81,7 @@ assert.strictEqual(C.starsFor({ goals: [{ type: "kutuk", need: 10 }] }, { kutuk:
 function play(n, seed, budget) {
   const L = C.levelDef(n), r = C.rngFrom(seed), cap = budget || L.moves;
   const left0 = Object.fromEntries(L.goals.map((g) => [g.type, g.need]));
-  let grid = C.freshGrid(r, { rates: L.rates, ensure: C.ensureFor(left0) }), board = L.board.slice(), used = 0, combo = 0;
+  let grid = C.freshGrid(r, { rates: L.rates, ensure: C.ensureFor(left0) }), board = L.board.slice(), used = 0, combo = 0, floor = { wait: L.rise, risen: L.risen };
   const left = Object.fromEntries(L.goals.map((g) => [g.type, g.need]));
   while (Object.values(left).some((v) => v > 0) && used < cap) {
     const open = Object.fromEntries(Object.entries(left).filter(([, v]) => v > 0)), mv = C.bestMove(grid, board, open); if (!mv) { used = cap; break; }
@@ -79,7 +89,8 @@ function play(n, seed, budget) {
     combo = out.lines ? combo + 1 : 0;
     const pr = { ...C.progressOf(mv.word, piece, out), score: C.wordPoints(mv.word, piece) + piece.cells.length + C.clearPoints(out, combo) };
     for (const k in left) left[k] = Math.max(0, left[k] - (pr[k] || 0));
-    board = out.board; grid = C.collapse(grid, mv.path, r, { rates: L.rates, plantRate: L.plantRate, ensure: C.ensureFor(left) }).grid;
+    grid = C.collapse(grid, mv.path, r, { rates: L.rates, plantRate: L.plantRate, ensure: C.ensureFor(left) }).grid;
+    const fl = C.floorTurn(out.board, floor, L.rise); board = fl.board; floor = fl;
   }
   return { stars: C.starsFor(L, left), used };
 }
@@ -125,6 +136,13 @@ assert.strictEqual(Mt.parTime(12), 144);
   assert.deepStrictEqual(run, [[1, 10], [5, 40], [20, 90]]); assert.deepStrictEqual([0, 1, 4, 5, 19, 20, 500].map((t) => Mt.ghostAt(run, t)), [0, 10, 10, 40, 40, 90, 90]);
   assert.deepStrictEqual(Mt.cleanRun("nope"), []); assert.strictEqual(Mt.quickIdx(2), 2); assert.strictEqual(Mt.quickIdx(99), null); assert.strictEqual(Mt.quickIdx("1"), null); }
 
+{ // the shop: every priced item has a price, offers are three priced items at 30% off, palettes cover the block items, unknown ids are nothing
+  const o = Mt.offersFor(C.rngFrom("2026-11-12:shop")); assert.strictEqual(new Set(o).size, 3); assert.deepStrictEqual(o, Mt.offersFor(C.rngFrom("2026-11-12:shop")));
+  for (const k of o) { const [cat, id] = k.split(":"); assert(Mt.priceOf(cat, id, o) < Mt.priceOf(cat, id) && Mt.priceOf(cat, id, o) % 10 === 0); }
+  assert.deepStrictEqual(Object.keys(Mt.PALETTES).sort(), Object.keys(Mt.SHOP.blocks[1]).sort()); assert(Object.values(Mt.PALETTES).every((p) => p.length === 5));
+  assert.strictEqual(Mt.priceOf("frame", "sampiyon"), null); assert.strictEqual(Mt.shopItem("ava", "constructor"), null); assert.strictEqual(Mt.shopItem("x", "y"), null);
+  const fs = require("fs"); for (const id in Mt.SHOP.ava[1]) assert(fs.existsSync(`art/animals/${id}.png`), id + " picture");
+}
 if (process.argv.includes("--calibrate")) { // prints the MOVES table for core.js
   const table = [];
   for (let n = 0; n < 100; n++) {

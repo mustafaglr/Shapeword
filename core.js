@@ -273,6 +273,32 @@
     return { board: b, ...ev, unshield: hadShield && !has(b, "jenerator") };
   }
 
+  // Rising floor: on a level with `rise`, after `rise` placements in a row that clear nothing, stone fills the free cells of the lowest
+  // row that has four or more, leaving three gaps. Nothing moves, so it suits a board without gravity; clearing rows is how the player pushes it back.
+  function riseRow(board, k) { // k: rows risen so far; picks the gaps, with no randomness so the bot's forecast stays exact
+    for (let r = B - 1; r >= 0; r--) {
+      const free = []; for (let c = 0; c < B; c++) if (!board[r * B + c]) free.push(c);
+      if (free.length < 4) continue;
+      const a = (k * 4 + 2) % free.length, n = free.length, gaps = [0, 1, 2].map((d) => free[(a + Math.ceil((d * n) / 3)) % n]), out = board.slice(); // three gaps, spread out
+      for (const c of free) if (!gaps.includes(c)) out[r * B + c] = { color: -1, stone: true };
+      return out;
+    }
+    return null; // no row has room left
+  }
+  function floorTurn(board, f, rise) { // after a placement: f = { wait, risen } -> the board and count after it
+    if (!rise) return { board, wait: f.wait, risen: f.risen, rose: false };
+    if (f.wait > 1) return { board, wait: f.wait - 1, risen: f.risen, rose: false };
+    const up = riseRow(board, f.risen);
+    return { board: up || board, wait: rise, risen: f.risen + (up ? 1 : 0), rose: !!up };
+  }
+  function sinkStones(board, rows) { // the rescue: the stone in the lowest `rows` rows that hold any goes away
+    const out = board.slice(); let done = 0;
+    for (let r = B - 1; r >= 0 && done < rows; r--) { let any = false; for (let c = 0; c < B; c++) if (out[r * B + c] && out[r * B + c].stone) { out[r * B + c] = null; any = true; } if (any) done++; }
+    return out;
+  }
+  const isBoss = (n) => n % 10 === 9; // a world's last level
+  const riseOf = (n) => (n < 12 || isJoker(n) || n % 10 < 2 ? 0 : isBoss(n) || n >= 30 ? 2 : 3); // from level 13; never while a world introduces its obstacle
+
   // ---------- endless levels: 10 worlds of 10 levels, then the worlds come round again, harder ----------
   const WORLDS = [
     { name: "Orman", ob: "kutuk" }, { name: "Çöl", ob: "akrep" }, { name: "Okyanus", ob: "yengec" }, { name: "Volkan", ob: "lav" }, { name: "Buzul", ob: "buz" },
@@ -282,7 +308,7 @@
   const worldOf = (n) => Math.floor(n / 10) % WORLDS.length;
   // Move budgets for levels 1-100: the 75th percentile of the words a greedy bot needed (8 letter seeds per level, 0 = joker level).
   // Regenerate with `node test.js --calibrate` after changing level generation, an obstacle rule or the word list.
-  const MOVES = [7, 7, 7, 7, 7, 7, 0, 8, 7, 10, 7, 7, 8, 0, 7, 7, 7, 7, 7, 7, 8, 10, 8, 7, 9, 7, 7, 0, 11, 7, 9, 7, 7, 7, 0, 10, 7, 8, 7, 7, 7, 0, 8, 7, 12, 8, 10, 11, 0, 8, 7, 7, 9, 9, 9, 0, 12, 13, 13, 8, 7, 11, 0, 12, 9, 8, 10, 7, 12, 0, 7, 8, 9, 11, 10, 11, 0, 12, 10, 12, 18, 12, 12, 0, 14, 14, 10, 14, 14, 7, 7, 13, 9, 8, 12, 9, 7, 0, 7, 13];
+  const MOVES = [7, 7, 7, 7, 7, 7, 0, 8, 7, 8, 7, 7, 8, 0, 7, 7, 7, 7, 7, 7, 8, 10, 7, 7, 8, 7, 7, 0, 10, 7, 9, 7, 7, 7, 0, 12, 7, 8, 7, 7, 7, 0, 8, 7, 9, 8, 11, 8, 0, 7, 7, 7, 9, 9, 7, 0, 13, 9, 11, 7, 7, 11, 0, 11, 8, 8, 12, 7, 12, 0, 7, 8, 9, 10, 10, 12, 0, 11, 13, 13, 18, 12, 11, 0, 13, 14, 10, 13, 13, 7, 7, 13, 9, 8, 11, 8, 8, 0, 7, 15];
   const botMoves = (n) => MOVES[n % 100] || 20;
   const SIZE = { kutuk: [6, 10], akrep: [2, 4], yengec: [3, 6], lav: [4, 8], buz: [3, 6], hayalet: [2, 4], tomurcuk: [6, 10], dinamit: [3, 5], cekirdek: [2, 4], bosluk: [2, 4] }; // cells: [a world's early levels, cap]
   const obCount = (kind, n) => Math.min(SIZE[kind][1], SIZE[kind][0] + Math.floor((n % 10) / 3) + Math.floor(n / 100));
@@ -329,15 +355,17 @@
       const size = { crystal: Math.min(8, 5 + Math.floor(n / 25)), long: Math.min(5, 3 + Math.floor(n / 30)), bomb: Math.min(4, 2 + Math.floor(n / 35)) };
       plan = [...(withOb ? [[ob, obCount(ob, n)]] : []), ...extra.slice(0, total - (withOb ? 1 : 0)).map((t) => [t, size[t]])];
     }
-    const goals = [];
+    const goals = [], rise = riseOf(n);
     for (const [type, size] of plan) {
       const o = OBST[type];
       goals.push({ type, need: o ? scatter(board, size, type, r) * o.hp * (o.spread ? 2 : 1) : size }); // ice counts hits; lava asks for twice what is there (it spreads)
       if (o && o.shield) scatter(board, Math.min(4, 2 + Math.floor(n / 100)), o.shield, r); // the generators that shield the cores
     }
+    let start = board, risen = 0; // a boss level starts with two stone rows already in
+    if (isBoss(n)) for (let k = 0; k < 2; k++) { const up = riseRow(start, k); if (up) { start = up; risen++; } }
     const moves = Math.ceil(botMoves(n) * (n < 10 ? 1.7 : n < 30 ? 1.5 : 1.35)) + 2 * Math.floor(n / 100); // people plan less sharply than the bot, beginners least; later rounds carry more obstacles
     const types = goals.map((g) => g.type);
-    return { n, world, biome, joker: false, goals, board, moves, plantRate: 0.5,
+    return { n, world, biome, joker: false, boss: isBoss(n), rise, risen, goals, board: start, moves: moves + (isBoss(n) ? 3 : 0), plantRate: 0.5,
       rates: { ...BASE_RATES, crystal: types.includes("crystal") ? 0.15 : 0, bomb: types.includes("bomb") ? 0.09 : BASE_RATES.bomb } };
   }
   // Stars from how much of the goals got done: all = 3, 70% = 2, 40% = 1, less = level not passed
@@ -388,7 +416,7 @@
   }
 
   const api = { M, H, B, BOX, MIN_LEN, MAX_LEN, BASE_RATES, WORLDS, BIOMES, OBST, REGIONS, worldOf, isWord, resolveWord, letterOf, kindOf, findWords, adjacent, shapeOf, makePiece,
-    plantWord, resolveChain, findChains, collapse, freshGrid, shuffleGrid, ensureFor, rngFrom, levelDef, botMoves, isJoker, starsFor, wordPoints, clearPoints, wordProgress, boardProgress, progressOf, emptyBoard, newOb, canPlace, fits, place, bestMove };
+    plantWord, resolveChain, findChains, collapse, freshGrid, shuffleGrid, ensureFor, rngFrom, levelDef, botMoves, isJoker, isBoss, riseRow, floorTurn, sinkStones, starsFor, wordPoints, clearPoints, wordProgress, boardProgress, progressOf, emptyBoard, newOb, canPlace, fits, place, bestMove };
   api.setSize = (cols, rows = cols) => { M = cols; H = rows; api.M = cols; api.H = rows; };
   if (typeof module !== "undefined") module.exports = api; else root.Core = api;
 })(typeof window !== "undefined" ? window : globalThis);

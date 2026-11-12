@@ -44,7 +44,31 @@
   const QUICK = ["İyi oyunlar!", "Yakalayabilirsen yakala", "Rövanş?", "Güzel oyundu", "Bu sefer benim", "Şanslıydın"]; // the only messages players can send each other
   const quickIdx = (x) => (Number.isInteger(x) && x >= 0 && x < QUICK.length ? x : null);
 
-  const api = { TIERS, CUP, tierOf, cupsAfter, PAY, COST, QUESTS, questsFor, CHESTS, BOOSTER_KEYS, chestLoot, STAR_STEP, FREE_MS, parTime, STREAK, cleanRun, ghostAt, QUICK, quickIdx };
+  // ---- shop: things bought with tokens stay forever. Price 0 = everyone has it; null = only earned (Şampiyon: a league week in the top 3) ----
+  const SHOP = {
+    ava: ["Karakter", { // Kenney "Animal Pack Remastered" (CC0); the pictures are in art/animals
+      chick: ["Civciv", 100], duck: ["Ördek", 100], frog: ["Kurbağa", 100], rabbit: ["Tavşan", 100], dog: ["Köpek", 100], cow: ["İnek", 100], chicken: ["Tavuk", 100], goat: ["Keçi", 100], horse: ["At", 100], monkey: ["Maymun", 100],
+      bear: ["Ayı", 200], elephant: ["Fil", 200], giraffe: ["Zürafa", 200], hippo: ["Su aygırı", 200], owl: ["Baykuş", 200], panda: ["Panda", 200], parrot: ["Papağan", 200], penguin: ["Penguen", 200], zebra: ["Zebra", 200], sloth: ["Tembel hayvan", 200],
+      buffalo: ["Bufalo", 350], crocodile: ["Timsah", 350], gorilla: ["Goril", 350], moose: ["Geyik", 350], narwhal: ["Deniz gergedanı", 350], rhino: ["Gergedan", 350], snake: ["Yılan", 350], walrus: ["Mors", 350], whale: ["Balina", 350] }],
+    frame: ["Çerçeve", { yok: ["Yok", 0], altin: ["Altın", 150], buz: ["Buz", 150], orman: ["Orman", 150], alev: ["Alev", 250], gece: ["Gece", 250], gokkusagi: ["Gökkuşağı", 400], sampiyon: ["Şampiyon", null] }],
+    tiles: ["Harfler", { klasik: ["Klasik", 0], ahsap: ["Ahşap", 200], seker: ["Şeker", 200], mermer: ["Mermer", 300], neon: ["Neon", 300], altin: ["Altın", 500] }],
+    blocks: ["Bloklar", { klasik: ["Klasik", 0], pastel: ["Pastel", 150], orman: ["Orman", 150], okyanus: ["Okyanus", 200], gece: ["Gece", 250], seker: ["Şeker", 250] }],
+  };
+  const PALETTES = { // the five block colours each "Bloklar" item paints with
+    klasik: ["#F25F5C", "#FFB627", "#2EC4B6", "#4D7CFE", "#9B5DE5"], pastel: ["#F4A6A6", "#F7D488", "#9EDFCF", "#A9C1FF", "#CDB4F5"],
+    orman: ["#6A994E", "#A7C957", "#BC6C25", "#386641", "#DDA15E"], okyanus: ["#0077B6", "#00B4D8", "#48CAE4", "#023E8A", "#90E0EF"],
+    gece: ["#FF2E88", "#FFD23F", "#3BF4FB", "#7B2FF7", "#22E58C"], seker: ["#FF6FB5", "#FFC6E0", "#7AD3F7", "#B28DFF", "#FFE066"],
+  };
+  const shopItem = (cat, id) => (SHOP[cat] && Object.prototype.hasOwnProperty.call(SHOP[cat][1], id) ? SHOP[cat][1][id] : null);
+  const OFFER_OFF = 0.3; // today's three offers are 30% off
+  function offersFor(rnd) { // three priced items a day, the same for everyone (the caller seeds rnd with the date)
+    const all = []; for (const cat in SHOP) for (const id in SHOP[cat][1]) if (SHOP[cat][1][id][1] > 0) all.push(cat + ":" + id);
+    for (let i = all.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [all[i], all[j]] = [all[j], all[i]]; }
+    return all.slice(0, 3);
+  }
+  const priceOf = (cat, id, offers = []) => { const it = shopItem(cat, id); if (!it || it[1] == null) return null; return offers.includes(cat + ":" + id) ? Math.round((it[1] * (1 - OFFER_OFF)) / 10) * 10 : it[1]; };
+
+  const api = { SHOP, PALETTES, shopItem, offersFor, priceOf, OFFER_OFF, TIERS, CUP, tierOf, cupsAfter, PAY, COST, QUESTS, questsFor, CHESTS, BOOSTER_KEYS, chestLoot, STAR_STEP, FREE_MS, parTime, STREAK, cleanRun, ghostAt, QUICK, quickIdx };
   if (typeof module !== "undefined") module.exports = api;
   root.Meta = api;
 })(typeof window !== "undefined" ? window : globalThis);
