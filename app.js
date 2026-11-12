@@ -647,10 +647,14 @@ $("map-back").onclick = landing; $("map-jump").onclick = () => jumpToCurrent(tru
 
 // ---- obstacle demos: a board corner played frame by frame, on the "?" card and when a world begins ----
 // A frame is three rows of five cells (the left three columns are one 3×3 box): . empty, b block, n block just placed, x cell that clears, e block being swallowed,
-// k/c/q the same three with a crystal on them (new, placed, clearing),
+// k/c/q the same three with a crystal on them (new, placed, clearing), B/X a block cell with a bomb on it (new, blowing up),
 // O the obstacle (C cracked, F faded, S shielded, 1-5 its countdown, ! stinging, * breaking), G generator (g breaking), A the gold letter a bud gives.
 // Every group of n is a shape a word can make (3-6 touching cells). A frame without a caption keeps the one before it.
 const DEMOS = {
+  long: [["nnn../...../.....", "3–4 harfli kelimenin bloğu küçüktür: bu hedefe sayılmaz."], ["bbb../nnnnn/.....", "En az 5 harfli kelime yaz: bloğu 5 kare ya da daha büyük olur."],
+    ["bbb../bbbbb/.....", "Blok tahtaya konduğu an sayılır. Harfleri çapraz da bağlayabilirsin."]],
+  bomb: [["b.b../nBnb./bb...", "Kırmızı halkalı bomba harfiyle yazdığın blokta bombalı bir kare olur."], ["x.x../xXxb./xx...", "Blok tahtaya konunca bomba patlar: çevresindeki 3×3 alan temizlenir."],
+    ["...../...b./.....", "Patladığı an sayılır. Sıkışan yeri açmak için kullan."]],
   crystal: [["knn../...../.....", "Kristalle yaptığın blokta kristalli bir kare olur."], ["cbb../nnn../.....", "O karenin kutusunu (ya da satırını, sütununu) doldur."], ["cbb../bbb../nnn.."],
     ["qxx../xxx../xxx..", "Kare patlayınca kristal toplanır."], ["...../...../....."]],
   kutuk: [["O..../...O./.....", "Kütük kendiliğinden kırılmaz, bir patlama ister."], ["Onn../.nnO./.....", "3×3 kutuyu (ya da bir satırı, sütunu) doldur."], ["Obb../nbbO./nnn.."],
@@ -677,7 +681,7 @@ function demoFrame(kind, frame) {
   const ob = (cls = "", badge = "", icon = kind) => `<div class="cell ob${cls}" data-ob="${kind}"><b>${obIcon(icon)}${badge}</b></div>`;
   const block = (color, cls = "") => `<div class="cell on${cls}"><b style="background:${color}"></b></div>`;
   return [...frame.replace(/\//g, "")].map((ch, i) => {
-    const out = ch === "." ? `<div class="cell"><b></b></div>` : ch === "b" ? block(COLORS[3]) : ch === "n" ? block(COLORS[1], " new") : ch === "x" ? block(COLORS[3], " clr") : ch === "k" ? block(COLORS[1], " new gem") : ch === "c" ? block(COLORS[3], " gem") : ch === "q" ? block(COLORS[3], " clr gem") : ch === "e" ? block(COLORS[1], " eat")
+    const out = ch === "." ? `<div class="cell"><b></b></div>` : ch === "b" ? block(COLORS[3]) : ch === "n" ? block(COLORS[1], " new") : ch === "x" ? block(COLORS[3], " clr") : ch === "k" ? block(COLORS[1], " new gem") : ch === "c" ? block(COLORS[3], " gem") : ch === "q" ? block(COLORS[3], " clr gem") : ch === "B" ? block(COLORS[1], " new bomb") : ch === "X" ? block(COLORS[3], " clr bomb") : ch === "e" ? block(COLORS[1], " eat")
       : ch === "O" ? ob() : ch === "C" ? ob("", "", "buzCrack") : ch === "F" ? ob(" off") : ch === "S" ? ob(" shielded") : ch === "*" ? ob(" brk") : ch === "G" ? ob("", "", "jenerator") : ch === "g" ? ob(" brk", "", "jenerator")
       : ch === "A" ? `<div class="cell"><b class="gilt">${star(true, 20)}</b></div>` : ch === "!" ? ob(" sting", `<em class="hot">0</em>`) : ob("", `<em${ch <= 2 ? ' class="hot"' : ""}>${ch}</em>`);
     return i % 5 > 2 ? out.replace('class="cell', 'class="cell bx') : out; // the neighbouring box is shaded, as on the board
