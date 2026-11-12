@@ -1,7 +1,7 @@
 // Shapeword core: letter grid with special tiles, word paths (8 directions) -> block pieces, 9x9 board with 3x3 boxes and obstacles,
 // and endless generated levels (goals + move budget). Pure functions, no DOM.
 // A grid tile is a string: its letter plus "*" gold, "!" bomb, "^" crystal; "?" alone is a joker (any letter).
-// A board cell is null, {color} (a placed block; gem: true where it carries a crystal) or {ob: kind, hp, ...} (an obstacle; each world has its own kind and rule, see OBST).
+// A board cell is null, {color, val} (a placed block: val is its share of the word's points, paid when the cell is cleared; gem: true where it carries a crystal) or {ob: kind, hp, ...} (an obstacle; each world has its own kind and rule, see OBST).
 (function (root) {
   const words = typeof module !== "undefined" ? require(process.env.WORDS || "./words-tr.js") : root; // the page loads words-tr.js first
   const DICT = new Set(words.DICT_WORDS.split(" "));
@@ -81,9 +81,11 @@
     const cells = path.map((i, k) => [rs[k] - r0, cs[k] - c0]);
     return { cells, h: Math.max(...rs) - r0 + 1, w: Math.max(...cs) - c0 + 1 };
   }
-  function makePiece(grid, path) {
-    const kinds = path.map((i) => kindOf(grid[i]));
-    return { ...shapeOf(path), bombIdx: kinds.indexOf("bomb"), gold: kinds.filter((k) => k === "gold").length, gems: kinds.flatMap((k, i) => (k === "crystal" ? [i] : [])) }; // gems: which cells carry a crystal
+  // pts: what the word is worth (3 a letter, doubled by each gold letter, times the speed chain, +15 from five letters). Writing the word earns
+  // nothing: the block carries the points and pays them cell by cell as its cells are cleared. gems: which cells carry a crystal.
+  function makePiece(grid, path, chain = 1) {
+    const kinds = path.map((i) => kindOf(grid[i])), gold = kinds.filter((k) => k === "gold").length, n = path.length;
+    return { ...shapeOf(path), bombIdx: kinds.indexOf("bomb"), gold, gems: kinds.flatMap((k, i) => (k === "crystal" ? [i] : [])), pts: n * 3 * 2 ** gold * chain + (n >= 5 ? 15 : 0) };
   }
 
   // ---- the wordless mode: a tile is one of five colours ("1".."5") and a chain of 3-6 touching tiles of one colour is the "word" ----
@@ -230,7 +232,7 @@
         ev.broken.push({ i, ob: v.ob });
         if (o.blast) { ev.blasts.push(i); for (const j of around(i)) if (b[j]) queue.add(j); }
       }
-      b[i] = null; ev.cleared.push(i); if (v.gem) ev.gems.push(i); // a crystal is collected when its cell is cleared, not before
+      b[i] = null; ev.cleared.push(i); if (v.gem) ev.gems.push(i); if (v.val) ev.paid += v.val; // a crystal is collected and a cell's points are paid when the cell is cleared, not before
     }
   }
   // After the hits every surviving obstacle makes its move. No randomness, so the bot's forecast is exactly what the player sees.
@@ -257,8 +259,9 @@
   // One turn: put the block down, clear what is full (plus the bomb letter), let the obstacles move, clear what their move completed.
   function place(board, piece, r0, c0, tag) {
     const b = board.slice();
-    piece.cells.forEach(([r, c], k) => (b[(r0 + r) * B + c0 + c] = piece.gems.includes(k) ? { color: tag, gem: true } : { color: tag }));
-    const ev = { lines: 0, regions: [], cleared: [], gems: [], cracked: [], broken: [], bombed: [], blasts: [], blocked: [], acts: [], late: [], stings: 0, bombAt: -1 };
+    const val = (piece.pts || 0) / piece.cells.length;
+    piece.cells.forEach(([r, c], k) => (b[(r0 + r) * B + c0 + c] = piece.gems.includes(k) ? { color: tag, val, gem: true } : { color: tag, val }));
+    const ev = { lines: 0, regions: [], cleared: [], gems: [], paid: 0, long: piece.cells.length >= 5, cracked: [], broken: [], bombed: [], blasts: [], blocked: [], acts: [], late: [], stings: 0, bombAt: -1 };
     const hadShield = has(b, "jenerator"), full = fullRegions(b), seeds = new Set(full.flat());
     ev.lines = full.length; ev.regions = full;
     if (piece.bombIdx >= 0) { ev.bombAt = (r0 + piece.cells[piece.bombIdx][0]) * B + c0 + piece.cells[piece.bombIdx][1]; for (const j of around(ev.bombAt)) if (b[j]) { ev.bombed.push(j); seeds.add(j); } }
@@ -270,7 +273,7 @@
       ev.lines += late.length; ev.regions = [...full, ...late]; resolve(b, new Set(late.flat()), ev);
       ev.late = [...ev.cleared.slice(n1), ...ev.cracked.slice(n2)];
     }
-    return { board: b, ...ev, unshield: hadShield && !has(b, "jenerator") };
+    return { board: b, ...ev, paid: Math.round(ev.paid), unshield: hadShield && !has(b, "jenerator") };
   }
 
   // Rising floor: on a level with `rise`, after `rise` placements in a row that clear nothing, stone fills the free cells of the lowest
@@ -343,13 +346,13 @@
     [["kutuk", 8], ["long", 3]],     // 10: the world's boss
   ];
   const BOMB_FROM = 7; // no bomb letters before the level that teaches them
-  const SCORE_PER_WORD = 42; // median points per word + placement on joker levels, measured with the bot
+  const SCORE_PER_WORD = 43; // median points per move on joker levels (placement + clears; the bot clears about three cells in four), measured with the bot
   const isJoker = (n) => n >= 6 && n % 7 === 6 && n % 10 !== 0; // never on a world's first level: that one introduces the obstacle
   function levelDef(n) {
     const r = rngFrom("lvl:" + n), world = worldOf(n), ob = WORLDS[world].ob, biome = WORLDS[world].name, board = emptyBoard();
     if (isJoker(n)) { // bonus level: rich letters, one score goal, extra gifts
       const moves = 12 + Math.min(8, Math.floor(n / 20));
-      return { n, world, biome, joker: true, goals: [{ type: "score", need: Math.round((SCORE_PER_WORD * moves * 0.75) / 50) * 50 }], board, moves, plantRate: 0.6,
+      return { n, world, biome, joker: true, goals: [{ type: "score", need: Math.round((SCORE_PER_WORD * moves * 0.6) / 50) * 50 }], board, moves, plantRate: 0.6,
         rates: { joker: 0.15, bomb: n < BOMB_FROM ? 0 : 0.07, gold: 0.15, crystal: 0 } };
     }
     let plan;
@@ -378,28 +381,27 @@
     const f = L.goals.reduce((a, g) => a + Math.min(1, (g.need - Math.max(0, left[g.type])) / g.need), 0) / L.goals.length;
     return f >= 0.999 ? 3 : f >= 0.7 ? 2 : f >= 0.4 ? 1 : 0;
   }
-  // Points: shared by the page and the test bot so budgets and score goals match what players see
-  const wordPoints = (word, piece, chain = 1) => word.length * 3 * 2 ** piece.gold * chain + (word.length >= 5 ? 15 : 0);
-  const clearPoints = (res, combo = 1) => (res.lines ? 20 * res.lines * res.lines * Math.max(1, combo) : 0) + res.bombed.length * 5 + res.broken.length * 10 + res.blasts.length * 15;
-  // Goal progress: what a word earns by itself (only its length), what its placement earns on the board, and both together (for the bot).
-  // Crystals and bombs count on the board: a crystal when its cell is cleared, a bomb when its block lands and goes off.
-  const wordProgress = (word) => ({ long: word.length >= 5 ? 1 : 0 });
+  // Points, shared by the page and the test bot so budgets and score goals match what players see. All of them are earned on the board:
+  // a placed block gives 1 a cell (the page adds that); a clear pays the cleared cells' word points plus the line, bomb and obstacle bonuses.
+  const clearPoints = (res, combo = 1) => res.paid + (res.lines ? 20 * res.lines * res.lines * Math.max(1, combo) : 0) + res.bombed.length * 5 + res.broken.length * 10 + res.blasts.length * 15;
+  // Goal progress, all of it on the board too: a crystal when its cell is cleared, a bomb when its block lands and goes off, a long word when its block lands.
   function boardProgress(res) {
     const p = res.gems.length ? { crystal: res.gems.length } : {};
     if (res.bombAt >= 0) p.bomb = 1;
+    if (res.long) p.long = 1;
     for (const x of res.broken) p[x.ob] = (p[x.ob] || 0) + 1;
     for (const i of res.cracked) { const k = res.board[i] ? res.board[i].ob : "buz"; p[k] = (p[k] || 0) + 1; } // a crack is a hit; a cell cracked and then broken in one turn counts both
     if (p.lav && !has(res.board, "lav")) p.lav = 999; // the last lava is out: that goal is done however many were asked for
     return p;
   }
-  const progressOf = (word, piece, res) => ({ ...wordProgress(word, piece), ...boardProgress(res) });
   // Hint/bot choice: the word and spot that move the open goals most, then clear the most
   function bestMove(grid, board, open = {}, find = findWords) { // find: findWords, or findChains in the wordless mode
     // Filling a row, column or box that holds a wanted obstacle (or runs right beside one: the splash) sets up a clear, the way a person
     // would; the fuller that region already is, the more a cell in it is worth.
     const want = (v) => v && (v.ob ? open[v.ob] || (v.ob === "jenerator" && open.cekirdek) : v.gem && open.crystal), worth = new Array(B * B).fill(0);
+    const fill = open.score || !Object.keys(open).length; // the score is the goal (a joker level, a duel): points come from clears, so every row, column and box is worth filling
     for (const reg of REGIONS) {
-      const direct = reg.some((i) => want(board[i])), near = !direct && reg.some((i) => orth(i).some((j) => want(board[j]) && board[j].ob && !OBST[board[j].ob].armor));
+      const direct = fill || reg.some((i) => want(board[i])), near = !direct && reg.some((i) => orth(i).some((j) => want(board[j]) && board[j].ob && !OBST[board[j].ob].armor));
       if (!direct && !near) continue;
       const share = (direct ? 1 : 0.6) * (0.6 + reg.reduce((a, i) => a + (board[i] ? 1 : 0), 0) / 4);
       for (const i of reg) worth[i] += share;
@@ -412,6 +414,7 @@
         const res = place(board, piece, r, c, 0);
         let score = res.lines * 20 + res.bombed.length + word.length - piece.cells.length * 0.5 - res.stings * 30
           + (open.crystal ? res.gems.length * 40 + piece.gems.length * 10 : 0) + (open.long && word.length >= 5 ? 30 : 0) + (open.bomb && piece.bombIdx >= 0 ? 35 : 0);
+        if (fill) score += res.paid * 0.5 + piece.pts * 0.2;
         for (const x of res.broken) score += open[x.ob] ? 40 : x.ob === "jenerator" && open.cekirdek ? 30 : 5;
         score += res.cracked.length * (open.buz ? 15 : 2);
         for (const a of res.acts) score -= a.type === "spread" ? 6 : a.type === "eat" ? 4 : 0;
@@ -423,7 +426,7 @@
   }
 
   const api = { M, H, B, BOX, MIN_LEN, MAX_LEN, BASE_RATES, WORLDS, BIOMES, OBST, REGIONS, worldOf, isWord, resolveWord, letterOf, kindOf, findWords, adjacent, shapeOf, makePiece,
-    plantWord, resolveChain, findChains, collapse, freshGrid, shuffleGrid, ensureFor, rngFrom, levelDef, botMoves, isJoker, isBoss, riseRow, floorTurn, sinkStones, starsFor, wordPoints, clearPoints, wordProgress, boardProgress, progressOf, emptyBoard, newOb, canPlace, fits, place, bestMove };
+    plantWord, resolveChain, findChains, collapse, freshGrid, shuffleGrid, ensureFor, rngFrom, levelDef, botMoves, isJoker, isBoss, riseRow, floorTurn, sinkStones, starsFor, clearPoints, boardProgress, emptyBoard, newOb, canPlace, fits, place, bestMove };
   api.setSize = (cols, rows = cols) => { M = cols; H = rows; api.M = cols; api.H = rows; };
   if (typeof module !== "undefined") module.exports = api; else root.Core = api;
 })(typeof window !== "undefined" ? window : globalThis);

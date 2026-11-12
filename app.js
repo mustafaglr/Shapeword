@@ -38,13 +38,16 @@ const LETTER_GOALS = {
   crystal: { name: "Kristal", svg: '<svg viewBox="0 0 24 24"><path d="M12 2l7 7-7 13L5 9z" fill="#B57BFF" stroke="#6D28D9" stroke-width="1.5" stroke-linejoin="round"/><path d="M5 9h14M12 2v20" stroke="#EADBFF" stroke-width="1"/></svg>',
     how: "Mor kristalle blok yap: blokta kristalli bir kare olur. O kare patlayınca kristal toplanır: satırını, sütununu ya da kutusunu doldur. Alanda her zaman en az bir kristal bulunur." },
   long: { name: "5+ harf", svg: '<svg viewBox="0 0 24 24"><rect x="1.5" y="6" width="21" height="12" rx="4" fill="#4D7CFE"/><text x="12" y="15.3" font-size="8" text-anchor="middle" fill="#fff" font-family="sans-serif" font-weight="700">5+</text></svg>',
-    how: "En az 5 harfli kelimeler yaz. Çapraz bağlantı serbest, uzun yollar daha kolay bulunur." },
+    how: "En az 5 harfli kelimeyle blok yap ve tahtaya koy: blok konunca sayılır. Çapraz bağlantı serbest, uzun yollar daha kolay bulunur." },
   bomb: { name: "Bomba", svg: '<svg viewBox="0 0 24 24"><circle cx="11" cy="14" r="7" fill="#2B2240"/><path d="M15 9l3-3" stroke="#2B2240" stroke-width="2.2"/><circle cx="19" cy="5" r="2.2" fill="#FF5A4F"/><circle cx="9" cy="12" r="1.6" fill="#6B5A8C"/></svg>',
     how: "Kırmızı halkalı bombayla blok yap ve tahtaya koy: konduğu yerde 3×3 alanı patlatır, o an sayılır. Alanda her zaman bir bomba bulunur." },
   score: { name: "Puan", svg: '<svg viewBox="0 0 24 24"><path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4l-5.9 3.1 1.2-6.5L2.5 9.4l6.6-.9z" fill="#F5B700" stroke="#B8801A" stroke-width="1.2" stroke-linejoin="round"/></svg>',
-    how: "Joker bölümü: harflerde bol joker ve altın var. Kelimelerden ve patlamalardan puan topla; sayaç sıfıra inince bölüm biter." },
+    how: "Joker bölümü: bol joker ve altın var. Puan tahtada kazanılır: kelimenin puanı bloğunda durur, blok patlayınca senin olur. Satır, sütun ve kutu doldur." },
 };
 const goalOf = (t) => LETTER_GOALS[t] || { name: OB[t][0], how: OB[t][1], svg: obIcon(t) };
+// Gift tiles: the same booster twice is one tile that says +2, not two tiles. `from` shifts the pop-in order past tiles drawn before these.
+const giftTiles = (list, t0, step, from = 0) => Object.entries(list.reduce((n, k) => ((n[k] = (n[k] || 0) + 1), n), {}))
+  .map(([k, n], i) => `<div class="gift" style="animation-delay:${t0 + (i + from) * step}s">${icon(k)}<strong>+${n}</strong>${BOOSTERS[k].name}</div>`).join("");
 const BOOSTERS = {
   karistir: { name: "Karıştır", icon: '<path d="M4 7h3l10 10h3M4 17h3l3-3M14 10l3-3h3M18 4l3 3-3 3M18 14l3 3-3 3"/>' },
   yenile: { name: "Yenile", icon: '<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>' },
@@ -402,7 +405,7 @@ function chestCard(kind) { // tap to open; "Al" moves on to the next chest that 
     const loot = takeChest(kind), cell = (art, n, name, i) => `<div class="gift" style="animation-delay:${0.35 + i * 0.22}s">${art}<strong>+${n}</strong>${name}</div>`;
     $("c-box").classList.add("open"); snd.play("gift"); buzz(30); confetti();
     $("c-say").textContent = "İçinden çıkanlar";
-    $("c-loot").innerHTML = cell(COIN, loot.tokens, "Jeton", 0) + loot.boosters.map((k, i) => cell(icon(k), 1, BOOSTERS[k].name, i + 1)).join("");
+    $("c-loot").innerHTML = cell(COIN, loot.tokens, "Jeton", 0) + giftTiles(loot.boosters, 0.35, 0.22, 1);
     $("c-ok").hidden = false; $("c-ok").focus();
   };
   $("c-ok").onclick = () => { const next = pendingChests()[0]; if (next) chestCard(next); else { closeCard(); renderLanding(); } };
@@ -504,7 +507,7 @@ function dailyReward() {
   const n = st.last === YESTERDAY ? st.n + 1 : 1, day = (n - 1) % 7, gifts = DAILY[day];
   card(`<span class="badge">Günlük ödül</span><h2>${n}. gün</h2>
     <div class="days">${DAILY.map((_, i) => `<i class="${i < day ? "got" : i === day ? "now" : ""}">${i + 1}</i>`).join("")}</div>
-    <div class="gifts">${gifts.map((k, i) => `<div class="gift" style="animation-delay:${0.2 + i * 0.15}s">${icon(k)}<strong>+1</strong>${BOOSTERS[k].name}</div>`).join("")}</div>
+    <div class="gifts">${giftTiles(gifts, 0.2, 0.15)}</div>
     <p>Her gün gir, ödül büyüsün. 7. gün dört güçlendirici birden gelir.</p><button class="b3 xl" id="d-take">Al</button>`);
   $("d-take").onclick = () => { gifts.forEach((k) => inv()[k]++); profile.streak = { last: TODAY, n }; saveProfile(); snd.play("gift"); confetti(); closeCard(); renderLanding(); };
 }
@@ -737,8 +740,8 @@ function tutSteps(hues) {
   const spec = [["tile gold", "A", "×2 puan"], ["tile bomb", "B", "3×3 patlar"], ["tile joker", "?", "her harf"], ["tile crystal", "K", "bloğunu patlat"]];
   return [
     ["Kaydır", hues ? "Aynı renkten en az 3 taşı birleştir." : "Yan yana harfleri kaydırıp kelime yaz.", tutArt(line + field)],
-    ["Blok olur", "Çizdiğin yol aynı şekilde bir blok olur.", tutArt(block)],
-    ["Koy, patlat", "Bloğu tahtaya sürükle. Dolan satır, sütun ve 3×3 kutu patlar.", tutArt(board + drop)],
+    ["Blok olur", "Çizdiğin yol aynı şekilde bir blok olur. Kelimenin puanı blokta durur.", tutArt(block)],
+    ["Koy, patlat", "Bloğu tahtaya sürükle. Dolan satır, sütun ve 3×3 kutu patlar: puan o zaman gelir.", tutArt(board + drop)],
     ["Hedefi bitir", "Hamlen bitmeden hedefleri tamamla. Tahtada yer kalmazsa bölüm biter.", `<div class="tutspec">${spec.map(([c, ch, t]) => `<div><span class="${c} mini"><span>${ch}</span></span><small>${t}</small></div>`).join("")}</div>`],
   ];
 }
@@ -802,7 +805,7 @@ function openScreen() {
   $("tagline").innerHTML = G.mode === "duel" ? (G.duel.kind === "daily" ? "Günlük Düello" : "Meydan okuma") : `<b>Bölüm ${G.L.n + 1}</b>${G.L.joker ? "Joker" : G.L.biome}`;
   $("help").hidden = G.mode === "duel"; $("back").setAttribute("aria-label", G.mode === "duel" ? "Ana ekran" : "Haritaya dön");
   busy = false; lastTick = performance.now();
-  say(G.mode === "duel" ? "Süre başladı. Ne kadar çok puan, o kadar iyi." : idleText(), "msg");
+  say(G.mode === "duel" ? "Süre başladı. Blokları koy ve patlat: puan tahtada." : idleText(), "msg");
   buildTiles(true); buildBoard(); renderHand(); renderGoals(); renderBoosters(); renderTop(); fitGame(); snd.play("start");
 }
 function fitGame() { // a short screen (Safari's bars, a small phone): shrink the letter field and the board until the game needs no scrolling
@@ -818,7 +821,7 @@ function fitGame() { // a short screen (Safari's bars, a small phone): shrink th
 // shortcut: without a recording (an older save) the real rival's curve is made up and only the final score is theirs.
 const ghostRival = (name, target, run, who) => { const tg = Math.max(0, Math.round(+target) || 0); return { name, target: tg, real: true, who, at: (t) => (t >= DUEL_SECONDS ? tg : Math.min(tg, Meta.ghostAt(run, t))) }; };
 function makeRival() {
-  const r = Core.rngFrom(TODAY + ":rakip"), fake = NAMES[Math.floor(r() * NAMES.length)], fakeTarget = 700 + Math.floor(r() * 600);
+  const r = Core.rngFrom(TODAY + ":rakip"), fake = NAMES[Math.floor(r() * NAMES.length)], fakeTarget = 600 + Math.floor(r() * 520);
   const real = others().filter((p) => p.duel && p.duel.date === TODAY && p.duel.score > 0).sort((a, b) => b.duel.score - a.duel.score)[0];
   const run = real ? Meta.cleanRun(real.duel.run) : [];
   if (run.length > 2) return ghostRival(real.name, real.duel.score, run, real);
@@ -960,7 +963,8 @@ function renderHand(popIdx = -1) {
       if (!Core.fits(G.board, p)) s.classList.add("cant");
       const room = Math.min(62, (h.clientHeight || 64) - 10), m = blockEl(p, Math.min(16, Math.floor((room - 2 * (Math.max(p.w, p.h) - 1)) / Math.max(p.w, p.h))), "mini"); s.appendChild(m);
       s.addEventListener("pointerdown", (e) => startDrag(e, k));
-      s.setAttribute("aria-label", `${p.cells.length} karelik blok${p.bombIdx >= 0 ? ", bombalı" : ""}${p.gems.length ? ", kristalli" : ""}`);
+      if (p.pts) s.insertAdjacentHTML("beforeend", `<em class="val">${p.pts}</em>`);
+      s.setAttribute("aria-label", `${p.cells.length} karelik, ${p.pts || 0} puanlık blok${p.bombIdx >= 0 ? ", bombalı" : ""}${p.gems.length ? ", kristalli" : ""}`);
       if (k === popIdx) anim(m, [{ transform: "scale(0) rotate(-20deg)" }, { transform: "scale(1.2) rotate(4deg)", offset: 0.6 }, { transform: "scale(1) rotate(0)" }], { duration: 380, easing: "ease-out" });
     }
     h.appendChild(s);
@@ -1068,18 +1072,14 @@ function endSwipe() {
     path = []; markPath(); return;
   }
   const used = path.slice(); path = []; drawTrace();
-  const piece = Core.makePiece(G.grid, used); piece.color = G.colorTurn++ % COLORS.length;
-  const slotIdx = G.hand.length; G.hand.push(piece);
   const t = performance.now(); G.chain = t - G.lastWordAt < CHAIN_MS ? Math.min(5, G.chain + 1) : 1; G.lastWordAt = t;
-  const pts = Core.wordPoints(w, piece, G.chain);
+  const piece = Core.makePiece(G.grid, used, G.chain); piece.color = G.colorTurn++ % COLORS.length; // the word's points ride on the block: they are paid on the board, as its cells are cleared
+  const slotIdx = G.hand.length; G.hand.push(piece);
   snd.play("word", w.length, G.chain); if (piece.gold) snd.play("gold");
   quest("words"); if (w.length >= 5) quest("long"); if (piece.gold) quest("gold", piece.gold);
   if (G.mode === "level") { G.moves--; bump($("moves")); }
   if (piece.bombIdx >= 0) snd.play("bombArm");
-  if (Core.wordProgress(w).long) credit("long", 1, [centerOf($("wordline"))]);
-  const [wx, wy] = centerOf(tiles[used[used.length - 1]].el); popNum(`+${pts}`, wx, wy - 10);
-  addScore(pts);
-  const parts = [`${G.hues ? w.length + " taş" : up(w)} +${pts}`]; if (G.chain > 1) parts.push(`Hız x${G.chain}`); if (piece.gold) parts.push("Altın"); if (piece.gems.length && G.left.crystal > 0) parts.push("Kristal blokta: patlat");
+  const parts = [`${G.hues ? w.length + " taş" : up(w)}: ${piece.pts} puanlık blok`]; if (G.chain > 1) parts.push(`Hız x${G.chain}`); if (piece.gold) parts.push("Altın"); if (piece.gems.length && G.left.crystal > 0) parts.push("Kristal blokta: patlat");
   say(parts.join(" · "), "ok");
   const res = Core.collapse(G.grid, used, G.rnd, { rates: G.L.rates, plantRate: G.L.plantRate, ensure: Core.ensureFor(G.left), hues: G.hues });
   animateWord(used, res, slotIdx); G.grid = res.grid;
@@ -1126,16 +1126,16 @@ async function placeBlock(k, p, at) {
   placed.forEach((i, j) => { paintCell(i, { color: p.color, gem: p.gems.includes(j) }); anim(cellEls[i].firstChild, [{ transform: "scale(.3)" }, { transform: "scale(1.15)", offset: 0.6 }, { transform: "scale(1)" }], { duration: 260, delay: j * 30, easing: "ease-out" }); });
   addScore(p.cells.length);
   if (res.lines) G.combo++; else if (!res.bombed.length) G.combo = 0;
-  const late = new Set(res.late), first = [...res.cleared, ...res.cracked].filter((i) => !late.has(i));
-  if (first.length || res.blocked.length) {
+  const late = new Set(res.late), first = [...res.cleared, ...res.cracked].filter((i) => !late.has(i)), pr = Core.boardProgress(res), mid = centerOf(cellEls[placed[placed.length >> 1]]);
+  if (pr.long) credit("long", 1, [mid]); // a long word counts when its block lands
+  if (res.cleared.length || res.cracked.length || res.blocked.length) {
     await wait(220);
-    const pts = Core.clearPoints(res, G.combo), [bx, by] = centerOf(cellEls[placed[placed.length >> 1]]);
-    if (pts) { popNum(`+${pts}`, bx, by - 20); addScore(pts); }
+    const pts = Core.clearPoints(res, G.combo);
+    if (pts) { popNum(`+${pts}`, mid[0], mid[1] - 20); addScore(pts); }
     cheer(res, p, at);
-    const pr = Core.boardProgress(res);
-    for (const kind in pr) credit(kind, pr[kind], [...res.broken.filter((x) => x.ob === kind).map((x) => x.i), ...(kind === "buz" ? res.cracked : kind === "crystal" ? res.gems : kind === "bomb" ? [res.bombAt] : [])].map((i) => centerOf(cellEls[i])));
+    for (const kind in pr) if (kind !== "long") credit(kind, pr[kind], [...res.broken.filter((x) => x.ob === kind).map((x) => x.i), ...(kind === "buz" ? res.cracked : kind === "crystal" ? res.gems : kind === "bomb" ? [res.bombAt] : [])].map((i) => centerOf(cellEls[i])));
     if (pr.crystal) snd.play("crystal");
-    await ripple(first, res, placed);
+    if (first.length) await ripple(first, res, placed);
   }
   if (res.acts.length || res.unshield) await playActs(res);
   if (late.size) await ripple([...late], res, placed);
@@ -1307,7 +1307,7 @@ function levelEnd(stars, finishedAll) {
     ${G.timed && finishedAll ? `<p class="${fast ? "rec" : "modenote"}">Süre ${mmss(took)} · ${fast ? `süre bonusu +${fast}` : `süre bonusu yok (sınır ${mmss(par)})`}</p>` : ""}
     ${G.casual ? (homeStage() >= 2 ? `<p class="modenote">Rekor ve lig puanı için Ayarlar'dan Klasik modu seç.</p>` : "") : recLine ? `<p class="rec">${recLine}</p>` : ""}${gain ? `<p>Haftalık lig: +${gain} puan</p>` : ""}
     <p class="earn"><span>${COIN}+${tok} jeton</span>${m.ws >= 2 ? `<span><span class="fl">${svgIcon(ICONS.flame)}</span>Galibiyet serisi ×${m.ws}</span>` : ""}${homeStage() ? `<span>${chestLine}</span>` : ""}</p>
-    ${gifts.length ? `<h3>Hediyeler</h3><div class="gifts">${gifts.map((k, i) => `<div class="gift" style="animation-delay:${0.9 + i * 0.18}s">${icon(k)}<strong>+1</strong>${BOOSTERS[k].name}</div>`).join("")}</div>` : `<p>Bu yıldızların hediyelerini almıştın. Daha çok yıldız, daha çok hediye.</p>`}
+    ${gifts.length ? `<h3>Hediyeler</h3><div class="gifts">${giftTiles(gifts, 0.9, 0.18)}</div>` : `<p>Bu yıldızların hediyelerini almıştın. Daha çok yıldız, daha çok hediye.</p>`}
     <button class="b3 xl green" id="o-next">Sonraki bölüm</button><div class="row2"><button class="b3 ghost" id="o-again">Tekrar</button><button class="b3 ghost" id="o-map">Harita</button></div>`, L.joker ? JOKER_THEME : THEMES[L.world]);
   const sc = $("o-score"), t0 = performance.now(); // count the move bonus up
   (function count(t) { const f = Math.min(1, (t - t0) / 900); sc.textContent = Math.round(G.score + bonus * f); if (f < 1 && !RM) requestAnimationFrame(count); else sc.textContent = final; })(t0);

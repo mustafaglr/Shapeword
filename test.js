@@ -2,7 +2,7 @@
 const assert = require("assert");
 const C = require("./core.js");
 const rnd = C.rngFrom("test"), B = C.B, at = (r, c) => r * B + c;
-const one = { ...C.shapeOf([0]), bombIdx: -1, gold: 0, gems: [] }; // a 1-cell block
+const one = { ...C.shapeOf([0]), bombIdx: -1, gold: 0, gems: [], pts: 0 }; // a 1-cell block
 const row0 = (gap, ob) => { const b = C.emptyBoard(); for (let c = 0; c < 8; c++) b[c] = c === gap ? ob : { color: 0 }; return b; }; // row 0 full but for its last cell
 const count = (b, kind) => b.filter((v) => v && v.ob === kind).length;
 
@@ -14,10 +14,13 @@ assert(C.adjacent(0, 6) && !C.adjacent(0, 2) && !C.adjacent(4, 5));
 assert.deepStrictEqual(C.makePiece(["a^", "b", "c^", ...Array(22).fill("d")], [0, 1, 2]).gems, [0, 2]);
 { // a crystal rides on its block: writing the word earns nothing, clearing its cell does
   const gem = C.makePiece(["a^", "b", "c", ...Array(22).fill("d")], [0, 1, 2]), row = C.emptyBoard().map((_, i) => (i >= 3 && i < 8 ? { color: 1 } : null));
-  assert.deepStrictEqual(C.wordProgress("abc", gem), { long: 0 }); assert.deepStrictEqual(C.wordProgress("abcde", gem), { long: 1 });
+  assert(gem.pts === 9 && C.makePiece(["a*", "b", "c", "d", "e", ...Array(20).fill("d")], [0, 1, 2, 3, 4], 2).pts === 75, "a block is worth 3 a letter, doubled by gold, times the chain, +15 from five letters");
+  const long = C.place(C.emptyBoard(), C.makePiece(Array(25).fill("d"), [0, 1, 2, 3, 4]), 4, 2, 0); assert(C.boardProgress(long).long === 1 && !C.boardProgress(C.place(C.emptyBoard(), gem, 4, 4, 0)).long, "a long word counts when its block lands");
   const bomb = C.place(C.emptyBoard(), C.makePiece(["a!", "b", "c", ...Array(22).fill("d")], [0, 1, 2]), 4, 4, 0); assert(bomb.bombAt === 40 && C.boardProgress(bomb).bomb === 1 && !C.boardProgress(C.place(C.emptyBoard(), gem, 4, 4, 0)).bomb, "a bomb counts when its block lands");
-  const put = C.place(row, gem, 0, 0, 0); assert(put.board[0].gem && !put.board[1].gem && !put.gems.length && !C.progressOf("abc", gem, put).crystal, "placed, not collected yet");
-  const done = C.place(put.board, one, 0, 8, 0); assert.deepStrictEqual(done.gems, [0]); assert.strictEqual(C.progressOf("kedi", one, done).crystal, 1); assert.strictEqual(done.board[0], null);
+  const put = C.place(row, gem, 0, 0, 0); assert(put.board[0].gem && !put.board[1].gem && !put.gems.length && !C.boardProgress(put).crystal, "placed, not collected yet");
+  assert(put.paid === 0 && C.clearPoints(put) === 0 && put.board[0].val === 3, "placing pays nothing: the points wait on the cells");
+  const done = C.place(put.board, one, 0, 8, 0); assert.deepStrictEqual(done.gems, [0]); assert.strictEqual(C.boardProgress(done).crystal, 1); assert.strictEqual(done.board[0], null);
+  assert(done.paid === 9 && C.clearPoints(done) === 29, "clearing the row pays the word's 9 points and the line's 20");
 }
 const g0 = C.freshGrid(rnd), col = C.collapse(g0, [6, 7, 12], rnd, { plantRate: 1 }); // tiles only ever fall down their own column
 assert.strictEqual(col.moves.length + col.fresh.length, 25);
@@ -31,7 +34,7 @@ let b = row0(-1); b[at(1, 4)] = C.newOb("kutuk"); // splash: next to a cleared r
 assert(C.place(b, one, 0, 8, 1).broken.some((x) => x.i === at(1, 4)));
 
 res = C.place(row0(3, C.newOb("buz")), one, 0, 8, 1); // Buzul: ice cracks first, and the crack counts toward the goal
-assert.deepStrictEqual(res.cracked, [3]); assert.strictEqual(res.board[3].hp, 1); assert.strictEqual(C.progressOf("kedi", one, res).buz, 1);
+assert.deepStrictEqual(res.cracked, [3]); assert.strictEqual(res.board[3].hp, 1); assert.strictEqual(C.boardProgress(res).buz, 1);
 
 b = C.emptyBoard(); b[at(4, 4)] = C.newOb("lav"); // Volkan: lava spreads when none was put out...
 res = C.place(b, one, 0, 0, 1); assert.strictEqual(res.acts.filter((a) => a.type === "spread").length, 1); assert.strictEqual(count(res.board, "lav"), 2);
@@ -94,7 +97,7 @@ function play(n, seed, budget) {
     const open = Object.fromEntries(Object.entries(left).filter(([, v]) => v > 0)), mv = C.bestMove(grid, board, open); if (!mv) { used = cap; break; }
     const piece = C.makePiece(grid, mv.path), out = C.place(board, piece, mv.r, mv.c, 0); used += 1 + out.stings;
     combo = out.lines ? combo + 1 : 0;
-    const pr = { ...C.progressOf(mv.word, piece, out), score: C.wordPoints(mv.word, piece) + piece.cells.length + C.clearPoints(out, combo) };
+    const pr = { ...C.boardProgress(out), score: piece.cells.length + C.clearPoints(out, combo) };
     for (const k in left) left[k] = Math.max(0, left[k] - (pr[k] || 0));
     grid = C.collapse(grid, mv.path, r, { rates: L.rates, plantRate: L.plantRate, ensure: C.ensureFor(left) }).grid;
     const fl = C.floorTurn(out.board, floor, L.rise); board = fl.board; floor = fl;
