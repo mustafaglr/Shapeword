@@ -285,11 +285,40 @@
     }
   ];
 
+  // ---- calm music over the ambience: a slow pad and a sparse music box in the world's key, through a soft echo ----
+  const KEYS = [[60, 1], [62, 1], [57, 1], [55, 0], [64, 1], [59, 0], [65, 1], [56, 1], [58, 0], [54, 0]]; // root (MIDI) and major (1) or minor (0) per world
+  const PROG = [[[0, 3, 7], [-4, 0, 3], [-9, -5, -2], [-2, 2, 5]], [[0, 4, 7], [-3, 0, 4], [-7, -3, 0], [-5, -1, 2]]]; // i VI III VII, I vi IV V (semitones)
+  const PENTA = [[0, 3, 5, 7, 10], [0, 2, 4, 7, 9]];
+  const BAR = 8;                                         // seconds per chord: slow enough to breathe with
+  function music(c, o, t, keep, k) {
+    const [root, maj] = KEYS[k], pad = F(c, o, "lowpass", 900, .5), box = c.createGain(), echo = c.createDelay(1), fb = c.createGain(), wet = c.createGain();
+    echo.delayTime.value = .48; fb.gain.value = .35; wet.gain.value = .5;
+    box.connect(o); box.connect(echo); echo.connect(fb); fb.connect(echo); echo.connect(wet); wet.connect(o);
+    let bar = 0, last = -1;
+    const chord = (t) => { // three voices, each two oscillators a hair apart, swelling in and fading out under the next chord
+      const ch = PROG[maj][bar++ % 4];
+      for (const semi of [...ch, ch[0] - 12]) {
+        const f = hz(root - 12 + semi), g = c.createGain(), v = semi === ch[0] - 12 ? .05 : .07;
+        g.gain.setValueAtTime(.0001, t); g.gain.linearRampToValueAtTime(v, t + 2.6); g.gain.setValueAtTime(v, t + BAR - 1.5); g.gain.exponentialRampToValueAtTime(.0001, t + BAR + 2.5);
+        g.connect(pad);
+        for (const [type, d] of [["triangle", 1], ["sine", 1.004]]) { const s = c.createOscillator(); s.type = type; s.frequency.value = f * d; s.connect(g); s.start(t); s.stop(t + BAR + 2.6); }
+      }
+    };
+    const note = (t) => { // a music-box note on the pentatonic scale, never the same twice running; sometimes a second one answers
+      let i; do i = (rnd(0, PENTA[0].length * 2) | 0); while (i === last); last = i;
+      const f = hz(root + 12 + PENTA[maj][i % 5] + (i >= 5 ? 12 : 0));
+      T(c, box, t, f, 2.6, .16); T(c, box, t, f * 2, 1.2, .03);
+      if (Math.random() < .3) { const f2 = hz(root + 12 + PENTA[maj][(i + 2) % 5]); T(c, box, t + .45, f2, 2.2, .1); }
+    };
+    chord(t + .2);
+    return [[BAR, BAR, chord], [1.6, 4.2, note]];
+  }
+
   function ambience(c, o, t, k) {
-    const g = c.createGain(), keep = [];
+    const g = c.createGain(), nature = c.createGain(), keep = [];
     g.gain.setValueAtTime(0, t); g.gain.setTargetAtTime(1, t, .3);                        // fades in over about a second
-    g.connect(o);
-    const shots = AMB[k](c, g, t, keep), next = shots.map((s) => t + rnd(0, s[1]));
+    g.connect(o); nature.gain.value = .45; nature.connect(g);                             // the world's sounds stay, quieter, under the music
+    const shots = [...AMB[k](c, nature, t, keep), ...music(c, g, t, keep, k)], next = shots.map((s, i) => t + (s[0] === BAR ? BAR : rnd(0, s[1])));
     return {
       k,
       more(until) {                                      // schedule the one-shots that fall before "until"

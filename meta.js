@@ -50,14 +50,20 @@
       chick: ["Civciv", 100], duck: ["Ördek", 100], frog: ["Kurbağa", 100], rabbit: ["Tavşan", 100], dog: ["Köpek", 100], cow: ["İnek", 100], chicken: ["Tavuk", 100], goat: ["Keçi", 100], horse: ["At", 100], monkey: ["Maymun", 100],
       bear: ["Ayı", 200], elephant: ["Fil", 200], giraffe: ["Zürafa", 200], hippo: ["Su aygırı", 200], owl: ["Baykuş", 200], panda: ["Panda", 200], parrot: ["Papağan", 200], penguin: ["Penguen", 200], zebra: ["Zebra", 200], sloth: ["Tembel hayvan", 200],
       buffalo: ["Bufalo", 350], crocodile: ["Timsah", 350], gorilla: ["Goril", 350], moose: ["Geyik", 350], narwhal: ["Deniz gergedanı", 350], rhino: ["Gergedan", 350], snake: ["Yılan", 350], walrus: ["Mors", 350], whale: ["Balina", 350] }],
-    frame: ["Çerçeve", { yok: ["Yok", 0], altin: ["Altın", 150], buz: ["Buz", 150], orman: ["Orman", 150], alev: ["Alev", 250], gece: ["Gece", 250], gokkusagi: ["Gökkuşağı", 400], sampiyon: ["Şampiyon", null] }],
-    tiles: ["Harfler", { klasik: ["Klasik", 0], ahsap: ["Ahşap", 200], seker: ["Şeker", 200], mermer: ["Mermer", 300], neon: ["Neon", 300], altin: ["Altın", 500] }],
-    blocks: ["Bloklar", { klasik: ["Klasik", 0], pastel: ["Pastel", 150], orman: ["Orman", 150], okyanus: ["Okyanus", 200], gece: ["Gece", 250], seker: ["Şeker", 250] }],
+    hat: ["Şapka", { yok: ["Yok", 0], kep: ["Kep", 150], kedi: ["Kedi kulağı", 150], parti: ["Parti şapkası", 150], kulaklik: ["Kulaklık", 200], sef: ["Aşçı", 200], cicektac: ["Çiçek tacı", 250], noel: ["Noel", 250],
+      boynuz: ["Boynuz", 300], korsan: ["Korsan", 300], mezun: ["Mezun", 300], buyucu: ["Büyücü", 400], hale: ["Hale", 400], tac: ["Taç", 600] }], // drawings: looks.js
+    frame: ["Çerçeve", { yok: ["Yok", 0], altin: ["Altın", 150], buz: ["Buz", 150], orman: ["Orman", 150], kalp: ["Kalpler", 150], cicek: ["Çiçekler", 200], seker: ["Şeker", 200], alev: ["Alev", 250], gece: ["Gece", 250],
+      elmas: ["Elmas", 350], neon: ["Neon", 350], gokkusagi: ["Gökkuşağı", 400], sampiyon: ["Şampiyon", null] }],
+    tiles: ["Harfler", { klasik: ["Klasik", 0], ahsap: ["Ahşap", 200], seker: ["Şeker", 200], kagit: ["Kâğıt", 200], buz: ["Buz", 250], cikolata: ["Çikolata", 250], karpuz: ["Karpuz", 250],
+      mermer: ["Mermer", 300], neon: ["Neon", 300], lacivert: ["Lacivert", 300], lav: ["Lav", 350], zumrut: ["Zümrüt", 400], yakut: ["Yakut", 400], altin: ["Altın", 500] }],
+    blocks: ["Bloklar", { klasik: ["Klasik", 0], pastel: ["Pastel", 150], orman: ["Orman", 150], okyanus: ["Okyanus", 200], gunbatimi: ["Gün batımı", 200], meyve: ["Meyve", 200], gece: ["Gece", 250], seker: ["Şeker", 250], kis: ["Kış", 250], retro: ["Retro", 300] }],
   };
   const PALETTES = { // the five block colours each "Bloklar" item paints with
     klasik: ["#F25F5C", "#FFB627", "#2EC4B6", "#4D7CFE", "#9B5DE5"], pastel: ["#F4A6A6", "#F7D488", "#9EDFCF", "#A9C1FF", "#CDB4F5"],
     orman: ["#6A994E", "#A7C957", "#BC6C25", "#386641", "#DDA15E"], okyanus: ["#0077B6", "#00B4D8", "#48CAE4", "#023E8A", "#90E0EF"],
     gece: ["#FF2E88", "#FFD23F", "#3BF4FB", "#7B2FF7", "#22E58C"], seker: ["#FF6FB5", "#FFC6E0", "#7AD3F7", "#B28DFF", "#FFE066"],
+    gunbatimi: ["#FF6B6B", "#FFA94D", "#FFD43B", "#C2255C", "#7048E8"], meyve: ["#E03131", "#F59F00", "#66A80F", "#AE3EC9", "#F783AC"],
+    kis: ["#A5D8FF", "#E7F5FF", "#74C0FC", "#B197FC", "#C5F6FA"], retro: ["#E76F51", "#F4A261", "#E9C46A", "#2A9D8F", "#264653"],
   };
   const shopItem = (cat, id) => (SHOP[cat] && Object.prototype.hasOwnProperty.call(SHOP[cat][1], id) ? SHOP[cat][1][id] : null);
   const OFFER_OFF = 0.3; // today's three offers are 30% off

@@ -13,11 +13,12 @@ Telefonda tarayıcıdan açıp "Ana Ekrana Ekle" dersen kendi simgesiyle tam ekr
 - **Yükselen taş zemin (13. bölümden itibaren):** her 3 hamlede (30. bölümden sonra her 2 hamlede) tahtanın en alttaki boş sırası taşla dolar, 3 boşluk kalır. Sayaç tahtanın sağ alt köşesinde. Taşlar da satır, sütun ve kutu patlayınca gider; yer kalmazsa bölüm biter (kurtarma: en alttaki 2 taş sırası kalkar). Dünyaların ilk iki bölümü ve Joker bölümleri taşsız.
 - **Patron bölümü:** her dünyanın 10. bölümü 2 taş sırasıyla başlar, zemin her 2 hamlede yükselir, 3 hamle fazladan verilir.
 - **Yıldızlar:** hedeflerin hepsi ★★★, %70'i ★★, %40'ı ★.
-- **Sesler:** hepsi tarayıcıda üretilir. Kaydırdığın her harf dünyanın gamında bir nota çalar; her engelin kendi sesi, her dünyanın kendi ortam sesi var. Ayarlar'dan ya da oyun içinde ‹ ile açılan Duraklat kartından kapatılabilir.
+- **Sesler:** hepsi tarayıcıda üretilir. Ortam sesinin üstünde her dünyanın kendi tonunda sakin bir müzik çalar: 8 saniyede bir değişen yumuşak akorlar ve seyrek müzik kutusu notaları, hafif yankıyla. Kaydırdığın her harf dünyanın gamında bir nota çalar; her engelin kendi sesi, her dünyanın kendi ortam sesi var. Ayarlar'dan ya da oyun içinde ‹ ile açılan Duraklat kartından kapatılabilir.
+- **Ekrana sığma:** kısa ekranlarda (Safari çubukları, küçük telefon) harf alanı ve tahta, sayfa kaydırma gerekmeyene kadar küçülür.
 - **Duraklat:** oyundaki ‹ artık bölümden atmaz: ses, ortam sesi ve titreşim anahtarları, Devam et ve (uyarıyla) Haritaya dön.
 - **Nasıl oynanır:** 4 resimli adım (Kaydır, Blok olur, Koy patlat, Hedefi bitir); ilk bölümden önce bir kez açılır. Oyundaki ? yalnızca o bölümün hedeflerini gösterir.
 - **Rekabet:** haftalık lig, günlük düello (o gün oynamış gerçek bir oyuncu varsa rakip odur), bölüm rekorları, haritada diğer oyuncular. Sıralama kartında ilk 3 podyumda; Lig sekmesinde bitime kalan süre ve ilk 3'e kalan puan, Kupa sekmesinde Bronz'dan Efsane'ye kupa yolu. Haftayı ilk 3'te bitiren Lig sandığı ve satılmayan Şampiyon çerçevesi kazanır.
-- **Mağaza:** jetonla kalıcı alınan 29 hayvan karakter (Kenney, CC0), 7 avatar çerçevesi, 6 harf görünümü ve 6 blok renk paleti. Her gün herkese aynı 3 ürün %30 indirimli. Alınanlar iki cihazın kaydı birleşirken kaybolmaz.
+- **Mağaza:** jetonla kalıcı alınan 29 hayvan karakter (Kenney, CC0), 13 şapka (taç, büyücü, korsan, kedi kulağı…), 12 şekilli çerçeve (alev, yaprak çelengi, kalpler, buz dikenleri…), 14 harf görünümü ve 10 blok renk paleti. Her gün herkese aynı 3 ürün %30 indirimli. Alınanlar iki cihazın kaydı birleşirken kaybolmaz.
 - **Üç mod:** Renk modunda kelime yok: aynı renkten en az 3 taşı birleştirirsin, çizdiğin yol blok olur. Rahat (varsayılan) o an yazılabilecek üç kelimeyi gösterir. Klasik modda kelimeleri kendin bulursun; rekor ve lig puanı yalnızca Klasik modda yazılır. Mod bölüm kartından seçilir.
 - **Süre (yalnızca Klasik):** bölüm süre tutar ama süre bölümü bitirmeyi engellemez. Üçüncü yıldız, bütün hedefleri hamle başına 12 saniyelik sınırın içinde bitirene verilir. Her bölümün ilk 10'u yıldıza, sonra süreye, sonra puana göre sıralanır.
 - **Renk modunda 9×6 alan ve renk körü ayarı:** Renk modu 54 küçük kare taşla oynanır, böylece üstten düşecek taşlar planlanabilir. Ayarlar'daki Renk körü modu, renk görme farklılıklarında ayırt edilen bir palete (Okabe-Ito) geçer ve şekilleri büyütür.
@@ -42,7 +43,10 @@ Telefonda tarayıcıdan açıp "Ana Ekrana Ekle" dersen kendi simgesiyle tam ekr
 | `words-tr.js` | Türkçe kelime listesi: yaklaşık 24.000 kabul edilen kelime (sözlük biçimleri ve sık kullanılan çekimli hâller), bunların 3.000'i harf alanına yerleştirilen gündelik kelimeler |
 | `build-words-tr.py` | kelime listesini üretir |
 | `config.js` | bulut kaydı ayarı (yalnızca okuma/güncelleme yetkili JSONBin Access Key) |
+| `looks.js` | çerçeve ve şapka çizimleri (SVG); `node looks.js` her mağaza ürününün çizimi var mı bakar |
 | `art/animals/` | hayvan karakter resimleri: Kenney "Animal Pack Remastered" (CC0), 112 px |
+| `art/bg/` | oyun ekranı arka planları: Kenney "Background Elements Remastered" (CC0); Gece, Uzay ve Boşluk çizili sahnede kalır |
+| `art/fx/` | patlama parıltıları: Kenney "Particle Pack" (CC0), 64 px |
 | `docs/` | tasarım kararları |
 
 ## Geliştirme
@@ -58,6 +62,6 @@ Telefonda tarayıcıdan açıp "Ana Ekrana Ekle" dersen kendi simgesiyle tam ekr
 - Sıklık ve çekimli hâllerin doğrulanması: [FrequencyWords](https://github.com/hermitdave/FrequencyWords), OpenSubtitles 2018 sayımları (CC BY-SA 4.0).
 - Kelimeler 3–6 harflidir. Çekimli bir hâl, kökü sözlükte varsa ve altyazılarda en az 30 kez geçiyorsa kabul edilir.
 
-Karakter resimleri: [Kenney.nl](https://kenney.nl/assets/animal-pack-remastered) (CC0, kaynak gösterme zorunlu değil).
+Karakter, arka plan ve parıltı resimleri: Kenney.nl ([Animal Pack Remastered](https://kenney.nl/assets/animal-pack-remastered), [Background Elements Remastered](https://kenney.nl/assets/background-elements-remastered), [Particle Pack](https://kenney.nl/assets/particle-pack); CC0, kaynak gösterme zorunlu değil).
 
 Not: düello rakibi (gerçek oyuncu yoksa) ve reklamlar simülasyondur.

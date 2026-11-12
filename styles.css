@@ -62,7 +62,7 @@ main { position: relative; z-index: 1; max-width: 430px; margin: 0 auto; display
 .wordline { position: relative; min-height: 28px; display: flex; align-items: center; justify-content: center; font: 700 1.25rem var(--display); letter-spacing: .1em; text-transform: uppercase; text-align: center; color: #fff; text-shadow: 0 2px 3px rgba(0,0,0,.3); }
 .wordline.ok { color: #FFF4B8; text-shadow: 0 0 12px rgba(255,244,184,.8), 0 2px 3px rgba(0,0,0,.35); } .wordline.no { color: rgba(255,255,255,.6); }
 .wordline.msg { font: 600 .85rem var(--ui); letter-spacing: 0; text-transform: none; color: rgba(255,255,255,.92); }
-.gridwrap { position: relative; width: 100%; aspect-ratio: 1; max-height: 31vh; max-height: 31dvh; margin: 2px auto 0; touch-action: none; }
+.gridwrap { position: relative; width: 100%; aspect-ratio: 1; max-height: calc(31vh * var(--fit, 1)); max-height: calc(31dvh * var(--fit, 1)); margin: 2px auto 0; touch-action: none; }
 .trace { position: absolute; inset: 0; pointer-events: none; overflow: visible; z-index: 2; }
 .tile { position: absolute; left: 0; top: 0; border-radius: 999px; display: grid; place-items: center; z-index: 1; will-change: transform;
   background: radial-gradient(circle at 35% 28%, #FFFFFF 0 16%, #EEF0FA 42%, #C6CCE4 100%); color: #262150;
@@ -82,7 +82,7 @@ main { position: relative; z-index: 1; max-width: 430px; margin: 0 auto; display
 @keyframes hint { 50% { box-shadow: 0 0 0 4px #fff, 0 0 22px #fff; } }
 
 .hand { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; touch-action: none; }
-.slot { height: clamp(44px, 7vh, 62px); height: clamp(44px, 7dvh, 62px); border-radius: 18px; background: var(--glass); box-shadow: inset 0 0 0 1.5px var(--glass-line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+.slot { height: clamp(40px, calc(7vh * var(--fit, 1)), 62px); height: clamp(40px, calc(7dvh * var(--fit, 1)), 62px); border-radius: 18px; background: var(--glass); box-shadow: inset 0 0 0 1.5px var(--glass-line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   display: grid; place-items: center; cursor: grab; touch-action: none; transition: opacity .15s; }
 .slot.cant .mini { opacity: .35; filter: grayscale(.6); }
 .slot.lifted .mini { opacity: .15; }
@@ -91,7 +91,7 @@ main { position: relative; z-index: 1; max-width: 430px; margin: 0 auto; display
 .mini i.bomb::after, .drag i.bomb::after { content: ""; position: absolute; inset: 22%; border-radius: 50%; background: #2B2240; box-shadow: 0 0 0 2px #FF5A4F; }
 .drag { position: fixed; pointer-events: none; z-index: 25; filter: drop-shadow(0 10px 12px rgba(0,0,0,.35)); }
 
-.board { display: grid; grid-template-columns: repeat(9, 1fr); width: min(100%, 34vh); width: min(100%, 34dvh); margin: 0 auto; border-radius: 20px; padding: 5px; box-sizing: border-box; touch-action: none;
+.board { display: grid; grid-template-columns: repeat(9, 1fr); width: min(100%, calc(34vh * var(--fit, 1))); width: min(100%, calc(34dvh * var(--fit, 1))); margin: 0 auto; border-radius: 20px; padding: 5px; box-sizing: border-box; touch-action: none;
   background: rgba(255,255,255,.9); box-shadow: inset 0 0 0 3px rgba(255,255,255,.6), 0 10px 24px rgba(0,0,0,.3); }
 .cell { aspect-ratio: 1; max-width: 100%; padding: 1.5px; box-sizing: border-box; }
 .cell > b { display: block; position: relative; width: 100%; height: 100%; border-radius: 6px; background: #E3E6F2; will-change: transform; box-shadow: inset 0 2px 3px rgba(38,33,80,.08); }
@@ -108,7 +108,7 @@ main { position: relative; z-index: 1; max-width: 430px; margin: 0 auto; display
 .cell em { position: absolute; top: -3px; right: -3px; min-width: 15px; height: 15px; border-radius: 999px; background: #262150; color: #fff; font: 700 .62rem/15px var(--ui); font-style: normal; text-align: center; z-index: 1; }
 .cell em.hot { background: var(--red); animation: fuse .4s ease-in-out infinite alternate; }
 
-.boosters { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.boosters { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .booster { position: relative; border: 0; border-radius: 18px; padding: 6px 4px 5px; color: #fff; cursor: pointer; font: 700 .7rem var(--ui); display: flex; flex-direction: column; align-items: center; gap: 2px;
   background: var(--glass); box-shadow: inset 0 0 0 1.5px var(--glass-line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 .booster svg { width: 22px; height: 22px; }
@@ -275,7 +275,7 @@ main { position: relative; z-index: 1; max-width: 430px; margin: 0 auto; display
 .admin h3 { margin: 0; color: #B8801A; }
 .card .field-in { background: var(--well); }
 .share { width: 100%; box-sizing: border-box; font: .85rem ui-monospace, Menlo, monospace; color: var(--ink); background: var(--well); border: 0; border-radius: 12px; padding: 10px; resize: none; }
-@media (max-height: 780px) { .gridwrap { max-height: 30vh; max-height: 30dvh; } .board { width: min(100%, 32vh); width: min(100%, 32dvh); } }
+@media (max-height: 780px) { .gridwrap { max-height: calc(30vh * var(--fit, 1)); max-height: calc(30dvh * var(--fit, 1)); } .board { width: min(100%, calc(32vh * var(--fit, 1))); width: min(100%, calc(32dvh * var(--fit, 1))); } }
 @media (max-height: 700px) { body { padding-block: 4px 6px; } main { gap: 5px; } .field { padding: 6px 10px 8px; } .wordline { min-height: 24px; font-size: 1.05rem; } .booster { padding: 4px 4px 3px; } .hud { padding: 4px; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 /* tokens, tiers, chests, quests, challenges */
@@ -376,7 +376,7 @@ body.cb .tile.hue.gold { box-shadow: 0 0 0 3px #14112B, 0 0 0 6px #FFE08A; } bod
 .cell.stone > b::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: radial-gradient(circle at 30% 35%, rgba(255,255,255,.22) 0 9%, transparent 10%), radial-gradient(circle at 68% 62%, rgba(0,0,0,.18) 0 11%, transparent 12%), radial-gradient(circle at 40% 78%, rgba(0,0,0,.12) 0 7%, transparent 8%); }
 .floorchip { display: inline-flex; align-items: center; gap: 3px; padding: 3px 9px 3px 6px; border-radius: 999px; background: #3B3450; color: #fff; font: 700 .85rem/1 var(--display); box-shadow: 0 2px 0 rgba(0,0,0,.3); }
 .floorchip svg { width: 14px; height: 14px; }
-.board > .floorchip { position: absolute; right: -6px; bottom: -11px; z-index: 3; pointer-events: none; }
+.board > .floorchip { position: absolute; left: calc(100% + 6px); bottom: 2px; z-index: 3; pointer-events: none; flex-direction: column; gap: 1px; padding: 6px 5px; border-radius: 12px; } /* beside the board, by the rows that rise */
 .floorchip.hot { background: #E5484D; animation: glow 0.7s ease-in-out infinite alternate; }
 .floorline { display: flex; align-items: center; gap: 8px; text-align: left; font-size: .86rem; font-weight: 600; color: var(--ink) !important; padding: 8px 10px; border-radius: 14px; background: var(--well); }
 .floorline .floorchip { flex: none; }
@@ -397,14 +397,14 @@ body.cb .tile.hue.gold { box-shadow: 0 0 0 3px #14112B, 0 0 0 6px #FFE08A; } bod
 .palprev { display: grid; grid-template-columns: repeat(3, 14px); gap: 3px; height: 46px; align-content: center; } .palprev i { width: 14px; height: 14px; border-radius: 4px; box-shadow: inset 0 -2px 0 rgba(0,0,0,.2); }
 .b3[disabled] { opacity: .5; pointer-events: none; }
 .ava.kv img { object-fit: contain; padding: 6%; box-sizing: border-box; }
-/* Avatar frames (bought in the shop; Şampiyon only from the league) */
-.ava.fr-altin { box-shadow: 0 0 0 calc(var(--s) * .07) #FFC93C, 0 0 0 calc(var(--s) * .11) #B8801A !important; }
-.ava.fr-buz { box-shadow: 0 0 0 calc(var(--s) * .07) #CFF1FF, 0 0 0 calc(var(--s) * .11) #4FB6E8, 0 0 calc(var(--s) * .2) #9BE1FF !important; }
-.ava.fr-orman { box-shadow: 0 0 0 calc(var(--s) * .07) #A7C957, 0 0 0 calc(var(--s) * .11) #386641 !important; }
-.ava.fr-alev { box-shadow: 0 0 0 calc(var(--s) * .06) #FFD23F, 0 0 0 calc(var(--s) * .1) #FF7A1A, 0 0 calc(var(--s) * .25) #FF3D00 !important; }
-.ava.fr-gece { box-shadow: 0 0 0 calc(var(--s) * .07) #2B2240, 0 0 0 calc(var(--s) * .1) #9B5DE5, 0 0 calc(var(--s) * .22) #7B2FF7 !important; }
-.ava.fr-gokkusagi { box-shadow: 0 0 0 calc(var(--s) * .04) #F25F5C, 0 0 0 calc(var(--s) * .08) #FFB627, 0 0 0 calc(var(--s) * .12) #2EC4B6, 0 0 0 calc(var(--s) * .16) #4D7CFE !important; }
-.ava.fr-sampiyon { box-shadow: 0 0 0 calc(var(--s) * .06) #fff, 0 0 0 calc(var(--s) * .12) #F5B700, 0 0 calc(var(--s) * .3) #FFD27A !important; }
+/* Avatar frames and hats (looks.js): drawn over the avatar in a frame 40% bigger; the face itself is clipped round */
+.ava.dressed { overflow: visible; position: relative; } .ava.dressed > img, .ava.dressed > svg { border-radius: 50%; }
+.ava > .acc { position: absolute; inset: -20%; pointer-events: none; z-index: 1; } .ava > .acc svg { width: 100%; height: 100%; display: block; overflow: visible; border-radius: 0; }
+.ava > .acc.hat { z-index: 2; }
+.ava > .acc.alev .flick { transform-origin: 70px 70px; animation: flick 1.2s ease-in-out infinite alternate; } @keyframes flick { to { transform: scale(1.04) rotate(2deg); } }
+.ava > .acc.neon svg { filter: drop-shadow(0 0 3px #3BF4FB) drop-shadow(0 0 4px #FF2E88); }
+@media (prefers-reduced-motion: reduce) { .ava > .acc .flick { animation: none; } }
+.shopgrid .ava, .pd .ava, .weekava .ava { margin: 8% 0 2%; }
 /* Letter skins (bought in the shop): only plain letters change; gold, bomb, crystal, joker and Renk tiles keep their meaning.
    A skin sets variables on an ancestor, so the nearest one wins: the shop's previews show their own skin whatever the body wears. */
 .tile:where(:not(.gold):not(.bomb):not(.crystal):not(.joker):not(.hue)) { background: var(--tbg, radial-gradient(circle at 35% 28%, #FFFFFF 0 16%, #EEF0FA 42%, #C6CCE4 100%)); color: var(--tfg, #262150); text-shadow: var(--tsh, none); box-shadow: var(--tbs, 0 3px 0 rgba(0,0,0,.28), inset 0 -3px 6px rgba(0,0,0,.12)); }
@@ -414,6 +414,14 @@ body.cb .tile.hue.gold { box-shadow: 0 0 0 3px #14112B, 0 0 0 6px #FFE08A; } bod
 .ts-mermer { --tbg: linear-gradient(135deg, transparent 40%, rgba(120,120,140,.25) 42%, transparent 46%), radial-gradient(circle at 35% 28%, #FFFFFF 0 20%, #E9E9EF 55%, #B9BAC8 100%); --tfg: #26232F; --tsh: initial; --tbs: initial; }
 .ts-neon { --tbg: radial-gradient(circle at 35% 28%, #3A3270 0 20%, #1B1838 100%); --tfg: #3BF4FB; --tsh: 0 0 6px #3BF4FB; --tbs: 0 0 0 2px #3BF4FB, 0 3px 0 rgba(0,0,0,.4); }
 .ts-altin { --tbg: radial-gradient(circle at 35% 28%, #FFFBEA 0 14%, #F3D36B 46%, #B88A1A 100%); --tfg: #3A2600; --tsh: initial; --tbs: 0 0 0 1.5px #FFF3C4, 0 3px 0 rgba(0,0,0,.28); }
+.ts-kagit { --tbg: linear-gradient(transparent 0 72%, rgba(77,124,254,.25) 72% 76%, transparent 76%), radial-gradient(circle at 35% 28%, #FFFDF5 0 30%, #F3EBD8 100%); --tfg: #2B2A4A; --tsh: initial; --tbs: 0 2px 0 rgba(0,0,0,.2), inset 0 0 0 1px #E2D7BC; }
+.ts-buz { --tbg: radial-gradient(circle at 35% 28%, #FFFFFF 0 14%, #CFF1FF 46%, #6CC4EE 100%); --tfg: #0B4A6E; --tsh: 0 1px 0 rgba(255,255,255,.8); --tbs: 0 0 0 1.5px rgba(255,255,255,.8), 0 3px 0 rgba(0,0,0,.25); }
+.ts-cikolata { --tbg: radial-gradient(circle at 35% 28%, #A9744F 0 14%, #7B4A2D 50%, #4A2A17 100%); --tfg: #FFE8C7; --tsh: 0 1px 1px rgba(0,0,0,.5); --tbs: initial; }
+.ts-karpuz { --tbg: radial-gradient(circle at 50% 50%, #FF5C6C 0 58%, #fff 59% 66%, #3FA34D 67%); --tfg: #fff; --tsh: 0 1px 2px rgba(0,0,0,.4); --tbs: initial; }
+.ts-lacivert { --tbg: radial-gradient(circle at 35% 28%, #3E5BA9 0 14%, #24366E 55%, #121C3D 100%); --tfg: #fff; --tsh: 0 1px 2px rgba(0,0,0,.5); --tbs: 0 0 0 1.5px #FFC93C, 0 3px 0 rgba(0,0,0,.35); }
+.ts-lav { --tbg: radial-gradient(circle at 35% 28%, #FFE066 0 10%, #FF7A1A 40%, #B3261E 75%, #3B1210 100%); --tfg: #fff; --tsh: 0 0 6px #FFB627; --tbs: 0 0 10px rgba(255,122,26,.6), 0 3px 0 rgba(0,0,0,.35); }
+.ts-zumrut { --tbg: radial-gradient(circle at 35% 28%, #C3F5DC 0 12%, #2BC48A 45%, #0B6B47 100%); --tfg: #fff; --tsh: 0 1px 2px rgba(0,0,0,.4); --tbs: 0 0 0 1.5px #E3FFF1, 0 3px 0 rgba(0,0,0,.3); }
+.ts-yakut { --tbg: radial-gradient(circle at 35% 28%, #FFC9CF 0 12%, #E5484D 45%, #7A0F1E 100%); --tfg: #fff; --tsh: 0 1px 2px rgba(0,0,0,.4); --tbs: 0 0 0 1.5px #FFE3E6, 0 3px 0 rgba(0,0,0,.3); }
 /* Rankings: podium, league countdown, trophy road, end-of-week result */
 .podium { display: grid; grid-template-columns: repeat(3, 1fr); align-items: end; gap: 6px; padding-top: 8px; }
 .pd { display: grid; justify-items: center; gap: 3px; min-width: 0; }
@@ -438,3 +446,6 @@ body.cb .tile.hue.gold { box-shadow: 0 0 0 3px #14112B, 0 0 0 6px #FFE08A; } bod
 .lb.rest div:nth-child(1) > span:first-child { color: var(--muted); }
 .node.boss { box-shadow: 0 0 0 4px #3B3450, 0 0 0 7px #FFC93C, 0 6px 0 rgba(0,0,0,.3); }
 .node .crown { position: absolute; top: -12px; right: -12px; transform: rotate(18deg); pointer-events: none; width: 26px; height: 26px; filter: drop-shadow(0 2px 1px rgba(0,0,0,.35)); } .node .crown svg { width: 100%; height: 100%; display: block; }
+/* Kenney backgrounds behind the game (art/bg): fill the screen, horizon low; a lighter veil than the drawn scenes need */
+#gamebg .kbg { width: 100%; height: 100%; object-fit: cover; object-position: center 62%; display: block; }
+#gamebg.kenney::after { background: linear-gradient(180deg, rgba(20,16,50,.12), rgba(20,16,50,.32) 55%, rgba(20,16,50,.6)); }

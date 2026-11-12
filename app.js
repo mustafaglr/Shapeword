@@ -210,10 +210,20 @@ function recordOf(n) { // the best score on a level, and whose it is
 // ===================== effects =====================
 const fx = $("fx"), fctx = fx.getContext("2d"); let parts = [], fxOn = false, fxLast = 0;
 function fxResize() { const d = devicePixelRatio || 1; fx.width = innerWidth * d; fx.height = innerHeight * d; fctx.setTransform(d, 0, 0, d, 0, 0); }
-addEventListener("resize", () => { fxResize(); layoutTiles(); renderLanding(); }); fxResize();
+addEventListener("resize", () => { fxResize(); fitGame(); renderLanding(); }); fxResize();
+// Particles are Kenney "Particle Pack" shapes (CC0, art/fx): white stars and sparkles painted in the burst's colour; squares until they load
+const SPRITES = ["symbol_02", "star_06", "star_07", "circle_05"].map((n) => { const i = new Image(); i.src = `art/fx/${n}.png`; return i; }), tinted = {};
+function tint(k, color) {
+  const key = k + color; if (tinted[key]) return tinted[key];
+  const img = SPRITES[k]; if (!img.complete || !img.naturalWidth) return null;
+  const c = document.createElement("canvas"), x = c.getContext("2d"); c.width = c.height = 64;
+  x.drawImage(img, 0, 0, 64, 64); x.globalCompositeOperation = "source-in"; x.fillStyle = color; x.fillRect(0, 0, 64, 64);
+  x.globalCompositeOperation = "lighter"; x.globalAlpha = 0.45; x.drawImage(img, 0, 0, 64, 64); // a white core keeps them shining
+  return (tinted[key] = c);
+}
 function burst(x, y, color, n, power = 1) {
   if (RM) return;
-  for (let k = 0; k < n; k++) { const life = 0.55 + Math.random() * 0.45; parts.push({ x, y, vx: (Math.random() - 0.5) * 460 * power, vy: (-Math.random() * 420 - 60) * power, life, max: life, size: 3 + Math.random() * 6, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 14, color }); }
+  for (let k = 0; k < n; k++) { const life = 0.55 + Math.random() * 0.45, sp = Math.random() < 0.45 ? 0 : 1 + ((Math.random() * 3) | 0); parts.push({ x, y, vx: (Math.random() - 0.5) * 460 * power, vy: (-Math.random() * 420 - 60) * power, life, max: life, size: (sp === 3 ? 8 : 12) + Math.random() * 10, sp, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 10, color }); }
   if (!fxOn) { fxOn = true; fxLast = 0; requestAnimationFrame(fxLoop); }
 }
 function fxLoop(t) {
@@ -221,7 +231,9 @@ function fxLoop(t) {
   fctx.clearRect(0, 0, innerWidth, innerHeight);
   for (const p of parts) {
     p.vy += 1300 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt; p.life -= dt;
-    fctx.save(); fctx.globalAlpha = Math.max(0, p.life / p.max); fctx.translate(p.x, p.y); fctx.rotate(p.rot); fctx.fillStyle = p.color; fctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size); fctx.restore();
+    fctx.save(); fctx.globalAlpha = Math.max(0, p.life / p.max); fctx.translate(p.x, p.y); fctx.rotate(p.rot);
+    const img = tint(p.sp, p.color); if (img) fctx.drawImage(img, -p.size / 2, -p.size / 2, p.size, p.size); else { const q = p.size * 0.45; fctx.fillStyle = p.color; fctx.fillRect(-q / 2, -q / 2, q, q); }
+    fctx.restore();
   }
   parts = parts.filter((p) => p.life > 0 && p.y < innerHeight + 40);
   if (parts.length) requestAnimationFrame(fxLoop); else { fxOn = false; fctx.clearRect(0, 0, innerWidth, innerHeight); }
@@ -256,9 +268,12 @@ const bump = (el) => el && anim(el, [{ transform: "scale(1)" }, { transform: "sc
 let G = null, busy = true, swiping = false, path = [], drag = null, hintPath = [], tiles = [], cellEls = [], ghostCells = [], shieldUp = false;
 let settling = false; // true while a placement is still animating: until then cells are painted by the animation, afterwards from the board
 const sceneCache = {};
-function paintScene(el, world) { // the world's horizon scene behind the home and game screens
+// Behind the game: Kenney's "Background Elements Remastered" (CC0, art/bg) where one fits the world, recoloured for lava; night, space and void keep their drawn scenes
+const KBG = { 0: ["forest"], 1: ["desert"], 2: ["shore"], 3: ["fall", "hue-rotate(-30deg) saturate(1.5) brightness(.72)"], 4: ["frozen"], 6: ["grass"], 7: ["fall"] };
+function paintScene(el, world) { // the world's horizon scene behind the game screen
   if (el.dataset.world === String(world)) return;
-  el.innerHTML = sceneCache[world] ||= Scenes.heroSVG(world, 420, 840); el.dataset.world = world;
+  const k = KBG[world]; el.classList.toggle("kenney", !!k);
+  el.innerHTML = k ? `<img class="kbg" src="art/bg/${k[0]}.png" alt=""${k[1] ? ` style="filter:${k[1]}"` : ""}>` : (sceneCache[world] ||= Scenes.heroSVG(world, 420, 840)); el.dataset.world = world;
 }
 function homeScene(world) { // on the home screen the scene fills the space above the panel, so its horizon stays in view; the panel itself sits on the night colour
   const bg = $("homebg"), h = Math.max(220, Math.round($("homesheet").getBoundingClientRect().top + 80)), artH = Math.max(300, Math.min(840, Math.round((420 * h) / Math.min(innerWidth, 560) / 20) * 20)), key = world + ":" + artH;
@@ -290,15 +305,17 @@ const AVATARS = { // id: [name, background, drawing]
 const PIC_OK = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]{100,24000}$/; // a photo in the cloud save is someone else's data: nothing but a small picture may reach the page
 const LETTER_BG = ["#4D7CFE", "#E5534F", "#1FA97A", "#9B5DE5", "#E08A00", "#1AA3A3"];
 const ANIMAL_BG = "#DDEBFF";
-function avatar(p, cls = "") {
-  const f = (p && p.face) || {}, name = (p && p.name) || "?", fr = frameOf(p); if (fr) cls += " fr-" + fr;
-  if (typeof f.pic === "string" && PIC_OK.test(f.pic)) return `<span class="ava ${cls}"><img src="${f.pic}" alt=""></span>`;
-  if (typeof f.kv === "string" && Meta.shopItem("ava", f.kv)) return `<span class="ava kv ${cls}" style="background:${ANIMAL_BG}"><img src="art/animals/${f.kv}.png" alt=""></span>`; // a cloud id reaches the page only if it is in the catalogue
-  if (Object.keys(AVATARS).includes(f.av)) return `<span class="ava ${cls}" style="background:${AVATARS[f.av][1]}">${AVATARS[f.av][2]}</span>`;
+function avatar(p, cls = "") { // the face, then the frame and the hat laid over it (looks.js)
+  const f = (p && p.face) || {}, name = (p && p.name) || "?", fr = wornOf(p, "frame"), hat = wornOf(p, "hat"), L = window.Looks;
+  const over = (fr && L ? `<i class="acc ring${fr === "alev" || fr === "neon" ? " " + fr : ""}">${L.frameSVG(fr)}</i>` : "") + (hat && L ? `<i class="acc hat">${L.hatSVG(hat)}</i>` : "");
+  if (fr || hat) cls += " dressed";
+  if (typeof f.pic === "string" && PIC_OK.test(f.pic)) return `<span class="ava ${cls}"><img src="${f.pic}" alt="">${over}</span>`;
+  if (typeof f.kv === "string" && Meta.shopItem("ava", f.kv)) return `<span class="ava kv ${cls}" style="background:${ANIMAL_BG}"><img src="art/animals/${f.kv}.png" alt="">${over}</span>`; // a cloud id reaches the page only if it is in the catalogue
+  if (Object.keys(AVATARS).includes(f.av)) return `<span class="ava ${cls}" style="background:${AVATARS[f.av][1]}">${AVATARS[f.av][2]}${over}</span>`;
   const bg = LETTER_BG[[...name].reduce((s, ch) => s + ch.codePointAt(0), 0) % LETTER_BG.length];
-  return `<span class="ava ${cls}" style="background:${bg}">${esc(up([...name][0] || "?"))}</span>`;
+  return `<span class="ava ${cls}" style="background:${bg}">${esc(up([...name][0] || "?"))}${over}</span>`;
 }
-function frameOf(p) { const m = p && p.meta, id = m && typeof m === "object" && m.look && m.look.frame; return typeof id === "string" && id !== "yok" && Meta.shopItem("frame", id) ? id : ""; }
+function wornOf(p, cat) { const m = p && p.meta, id = m && typeof m === "object" && m.look && m.look[cat]; return typeof id === "string" && id !== "yok" && Meta.shopItem(cat, id) ? id : ""; }
 async function photoFace(file) { // any picture becomes a small square JPEG; the original never leaves the device
   const url = URL.createObjectURL(file);
   try {
@@ -324,7 +341,7 @@ function paintFaces() { // the picker on the settings card: the letter, the char
 // ---- shop: tokens buy characters, avatar frames, letter and block looks; what is bought stays (meta.own), what is worn is meta.look ----
 const SHOP_OFFERS = Meta.offersFor(Core.rngFrom(TODAY + ":shop"));
 const owns = (cat, id) => { const it = Meta.shopItem(cat, id); return !!it && (it[1] === 0 || isAdmin() || (meta().own || []).includes(cat + ":" + id)); };
-const lookOf = (cat) => { const l = meta().look || {}, id = l[cat]; return id && owns(cat, id) ? id : cat === "frame" ? "yok" : "klasik"; };
+const lookOf = (cat) => { const l = meta().look || {}, id = l[cat]; return id && owns(cat, id) ? id : cat === "frame" || cat === "hat" ? "yok" : "klasik"; };
 function applyLook() { // the letter skin is a body class; the block palette repaints the shared colour list in place
   if (!profile) return;
   document.body.className = document.body.className.replace(/\bts-\w+/g, "").trim(); document.body.classList.add("ts-" + lookOf("tiles"));
@@ -333,7 +350,7 @@ function applyLook() { // the letter skin is a body class; the block palette rep
 function wear(cat, id) { const m = meta(); if (cat === "ava") setFace({ kv: id }); else { m.look = { ...(m.look || {}), [cat]: id }; saveProfile(); } applyLook(); }
 function shopPreview(cat, id) {
   if (cat === "ava") return avatar({ face: { kv: id } });
-  if (cat === "frame") return avatar({ ...profile, meta: { look: { frame: id } } });
+  if (cat === "frame" || cat === "hat") return avatar({ ...profile, meta: { look: { ...(meta().look || {}), [cat]: id } } });
   if (cat === "tiles") return `<span class="skinprev ts-${id}">${["Ş", "E", "K"].map((ch) => `<span class="tile mini"><span>${ch}</span></span>`).join("")}</span>`;
   return `<span class="palprev">${Meta.PALETTES[id].map((c) => `<i style="background:${c}"></i>`).join("")}</span>`;
 }
@@ -396,7 +413,7 @@ function weekPrize() { // shown on the first visit of a new week
   const r = rollWeek(); if (!r) return false;
   saveProfile();
   card(`<span class="badge">Haftalık lig bitti</span><div class="bigrank">${r.rank}.</div><h2>${r.rank === 1 ? "Şampiyonsun!" : "Podyumdasın!"}</h2>
-    <div class="weekava">${avatar({ ...profile, meta: { look: { frame: "sampiyon" } } })}</div>
+    <div class="weekava">${avatar({ ...profile, meta: { look: { ...(meta().look || {}), frame: "sampiyon" } } })}</div>
     <p>${r.pts} puanla ${r.n > 1 ? "iki Lig sandığı" : "bir Lig sandığı"} ve <strong>Şampiyon çerçevesi</strong> kazandın. Çerçeveyi Mağaza'dan takabilirsin.</p><button class="b3 xl" id="w-open">Sandığı aç</button>`);
   confetti(); snd.play("record");
   $("w-open").onclick = () => chestCard("league");
@@ -533,7 +550,7 @@ function settings() {
     <div style="text-align:left"><label for="s-name"><strong>İsim</strong></label></div>
     <input class="field-in" id="s-name" maxlength="16" value="${esc(profile.name)}">
     <button class="b3 blue" id="s-save">İsmi kaydet</button>
-    <p style="font-size:.78rem">${cloudInfo} · Sürüm ${window.SW_BUILD || "geliştirme"} · Hayvan çizimleri: Kenney.nl (CC0)</p>
+    <p style="font-size:.78rem">${cloudInfo} · Sürüm ${window.SW_BUILD || "geliştirme"} · Hayvanlar, arka planlar ve parıltılar: Kenney.nl (CC0)</p>
     ${isAdmin() ? `<div class="admin"><h3>Admin</h3><p>Tüm bölümler açık, güçlendiriciler sınırsız.</p>
       <div class="row2"><input class="field-in" id="a-lvl" type="number" min="1" value="${nextLevel() + 1}" aria-label="Bölüm numarası"><button class="b3 ghost" id="a-go">Bölüme git</button></div>
       <div class="row2"><button class="b3 ghost" id="a-cup">+100 kupa</button><button class="b3 ghost" id="a-chest">Sandığı hazırla</button></div><button class="b3 ghost" id="a-quest">Görevleri tamamla</button>
@@ -760,7 +777,13 @@ function openScreen() {
   $("help").hidden = G.mode === "duel"; $("back").setAttribute("aria-label", G.mode === "duel" ? "Ana ekran" : "Haritaya dön");
   busy = false; lastTick = performance.now();
   say(G.mode === "duel" ? "Süre başladı. Ne kadar çok puan, o kadar iyi." : idleText(), "msg");
-  buildTiles(true); buildBoard(); renderHand(); renderGoals(); renderBoosters(); renderTop(); snd.play("start");
+  buildTiles(true); buildBoard(); renderHand(); renderGoals(); renderBoosters(); renderTop(); fitGame(); snd.play("start");
+}
+function fitGame() { // a short screen (Safari's bars, a small phone): shrink the letter field and the board until the game needs no scrolling
+  if ($("app").hidden) return;
+  const root = document.documentElement; root.style.removeProperty("--fit");
+  for (let k = 1; k > 0.6 && root.scrollHeight > innerHeight + 1; ) { k -= 0.04; root.style.setProperty("--fit", k.toFixed(2)); }
+  layoutTiles();
 }
 // The daily rival: the best real player who already played today, else a simulated one. A real rival's score follows the recording of that run when there is one.
 // shortcut: without a recording (an older save) the real rival's curve is made up and only the final score is theirs.
