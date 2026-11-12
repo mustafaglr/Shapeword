@@ -323,6 +323,7 @@ button.pill { cursor: pointer; } .pill svg { width: 18px; height: 18px; } .pill 
 @keyframes vsl { from { transform: translateX(-140px) rotate(-20deg); opacity: 0; } } @keyframes vsr { from { transform: translateX(140px) rotate(20deg); opacity: 0; } } @keyframes vsb { from { transform: scale(0); } }
 .vs .ava { --s: 48px; align-self: center; margin-bottom: 6px; box-shadow: none; }
 .cupline, .purse, .earn, .wsline { display: flex; align-items: center; justify-content: center; gap: 5px; flex-wrap: wrap; }
+.earn { column-gap: 14px; } .earn > span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 .cupline svg, .purse svg, .earn svg, .wsline svg { width: 19px; height: 19px; flex: none; } .cupline, .wsline { font-weight: 700; color: var(--ink) !important; } .earn svg + svg, .wsline svg, .earn .fl { color: #E8590C; }
 .rankup { display: grid; justify-items: center; gap: 2px; animation: giftin .6s cubic-bezier(.3, 1.5, .6, 1) backwards; } .rankup .tierb { width: 76px; height: 76px; filter: drop-shadow(0 6px 10px rgba(0,0,0,.25)); } .rankup strong { font: 700 1.25rem var(--display); } .rankup span { color: var(--muted); font-size: .86rem; }
 .quick { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }

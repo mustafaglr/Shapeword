@@ -14,7 +14,8 @@ assert(C.adjacent(0, 6) && !C.adjacent(0, 2) && !C.adjacent(4, 5));
 assert.deepStrictEqual(C.makePiece(["a^", "b", "c^", ...Array(22).fill("d")], [0, 1, 2]).gems, [0, 2]);
 { // a crystal rides on its block: writing the word earns nothing, clearing its cell does
   const gem = C.makePiece(["a^", "b", "c", ...Array(22).fill("d")], [0, 1, 2]), row = C.emptyBoard().map((_, i) => (i >= 3 && i < 8 ? { color: 1 } : null));
-  assert.strictEqual(C.wordProgress("abc", gem).crystal, undefined);
+  assert.deepStrictEqual(C.wordProgress("abc", gem), { long: 0 }); assert.deepStrictEqual(C.wordProgress("abcde", gem), { long: 1 });
+  const bomb = C.place(C.emptyBoard(), C.makePiece(["a!", "b", "c", ...Array(22).fill("d")], [0, 1, 2]), 4, 4, 0); assert(bomb.bombAt === 40 && C.boardProgress(bomb).bomb === 1 && !C.boardProgress(C.place(C.emptyBoard(), gem, 4, 4, 0)).bomb, "a bomb counts when its block lands");
   const put = C.place(row, gem, 0, 0, 0); assert(put.board[0].gem && !put.board[1].gem && !put.gems.length && !C.progressOf("abc", gem, put).crystal, "placed, not collected yet");
   const done = C.place(put.board, one, 0, 8, 0); assert.deepStrictEqual(done.gems, [0]); assert.strictEqual(C.progressOf("kedi", one, done).crystal, 1); assert.strictEqual(done.board[0], null);
 }

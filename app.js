@@ -40,7 +40,7 @@ const LETTER_GOALS = {
   long: { name: "5+ harf", svg: '<svg viewBox="0 0 24 24"><rect x="1.5" y="6" width="21" height="12" rx="4" fill="#4D7CFE"/><text x="12" y="15.3" font-size="8" text-anchor="middle" fill="#fff" font-family="sans-serif" font-weight="700">5+</text></svg>',
     how: "En az 5 harfli kelimeler yaz. Çapraz bağlantı serbest, uzun yollar daha kolay bulunur." },
   bomb: { name: "Bomba", svg: '<svg viewBox="0 0 24 24"><circle cx="11" cy="14" r="7" fill="#2B2240"/><path d="M15 9l3-3" stroke="#2B2240" stroke-width="2.2"/><circle cx="19" cy="5" r="2.2" fill="#FF5A4F"/><circle cx="9" cy="12" r="1.6" fill="#6B5A8C"/></svg>',
-    how: "Kırmızı halkalı bomba harfini kelimende kullan. O kelimenin bloğu konduğu yerde 3×3 alanı patlatır. Alanda her zaman bir bomba harfi bulunur." },
+    how: "Kırmızı halkalı bombayla blok yap ve tahtaya koy: konduğu yerde 3×3 alanı patlatır, o an sayılır. Alanda her zaman bir bomba bulunur." },
   score: { name: "Puan", svg: '<svg viewBox="0 0 24 24"><path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4l-5.9 3.1 1.2-6.5L2.5 9.4l6.6-.9z" fill="#F5B700" stroke="#B8801A" stroke-width="1.2" stroke-linejoin="round"/></svg>',
     how: "Joker bölümü: harflerde bol joker ve altın var. Kelimelerden ve patlamalardan puan topla; sayaç sıfıra inince bölüm biter." },
 };
@@ -180,7 +180,7 @@ async function cloudGet() {
 }
 function startOver() { // the whole game was reset in the cloud: this device forgets its player and starts at the name screen
   profile = null; G = null; try { localStorage.removeItem("sw4:profile"); } catch {}
-  prefs.tut = false; store.set("sw4:prefs", prefs); closeCard(); landing(); toast("Oyun sıfırlandı: baştan başlıyorsun");
+  prefs.tut = false; prefs.stage = 0; store.set("sw4:prefs", prefs); closeCard(); landing(); toast("Oyun sıfırlandı: baştan başlıyorsun");
 }
 async function cloudPut(data) {
   const r = await fetch(CLOUD.url, { method: "PUT", headers: { "Content-Type": "application/json", [CLOUD.header || "X-Master-Key"]: CLOUD.key }, body: JSON.stringify(data) });
@@ -463,34 +463,38 @@ function landing() {
   }
   renderLanding(); cloudSync().then(() => { settleDuels(); renderLanding(); if (!weekPrize()) dailyReward(); });
 }
+// What the home screen shows: at first only OYNA; chests, quests and the map from level 3; duel, league and shop from level 5.
+// What has opened on this device stays open (prefs.stage), even if the progress is reset.
+const stageNow = () => (isAdmin() || nextLevel() >= 4 ? 2 : nextLevel() >= 2 ? 1 : 0), homeStage = () => Math.max(prefs.stage || 0, stageNow());
 const streakOn = () => profile.streak && (profile.streak.last === TODAY || profile.streak.last === YESTERDAY);
 function renderLanding() {
   if ($("landing").hidden || !profile) return;
   applyLook();
   const n = nextLevel(), w = worldOf(n), m = meta(), cups = cupsOf(profile), t = Meta.tierOf(cups), pend = pendingChests(), freeLeft = m.freeAt - Date.now(), ws = Math.min(Meta.STREAK.length, m.ws || 0);
   const qGot = QUEST_KEYS.filter((k) => m.q.got[k]).length, qReady = QUEST_KEYS.some((k) => !m.q.got[k] && (m.q.p[k] || 0) >= Meta.QUESTS[k][1]);
-  const inbox = duelsOf().filter((d) => d.b === profile.id && d.sb == null).length;
+  const inbox = duelsOf().filter((d) => d.b === profile.id && d.sb == null).length, st = homeStage();
+  const tiles = [st >= 1 && `<button class="tilebtn" id="l-map">${svgIcon(ICONS.map)}Harita</button>`, st >= 2 && `<button class="tilebtn" id="l-duel">${svgIcon(ICONS.duel)}Düello${inbox ? `<i class="dot" aria-label="${inbox} meydan okuma">${inbox}</i>` : ""}</button>`,
+    st >= 2 && `<button class="tilebtn" id="l-rank">${svgIcon(ICONS.rank)}Sıralama</button>`, st >= 2 && `<button class="tilebtn" id="l-shop">${svgIcon(ICONS.shop)}Mağaza</button>`, `<button class="tilebtn" id="l-help">${svgIcon(ICONS.help)}Nasıl?</button>`].filter(Boolean);
   $("homemid").innerHTML = ""; $("homesheet").classList.add("has-face");
   $("homesheet").innerHTML = `<button class="facebtn" id="l-face" aria-label="Karakterini ya da fotoğrafını değiştir">${avatar(profile)}<i>${svgIcon(ICONS.edit)}</i></button>
     <div class="whoami"><small>Merhaba</small><strong>${esc(profile.name)}</strong>${isAdmin() ? "<em>admin</em>" : ""}
-      <div class="pills"><button class="pill" id="l-tier" aria-label="Kademe ${Meta.TIERS[t][0]}, ${cups} kupa">${tierBadge(t)}${Meta.TIERS[t][0]} · ${cups}</button><span class="pill" aria-label="${isAdmin() ? "Sınırsız" : m.tokens} jeton">${COIN}${isAdmin() ? "∞" : m.tokens}</span><span class="pill" aria-label="${totalStars()} yıldız"><b>★</b>${totalStars()}</span></div></div>
+      ${st ? `<div class="pills">${st >= 2 ? `<button class="pill" id="l-tier" aria-label="Kademe ${Meta.TIERS[t][0]}, ${cups} kupa">${tierBadge(t)}${Meta.TIERS[t][0]} · ${cups}</button>` : ""}<span class="pill" aria-label="${isAdmin() ? "Sınırsız" : m.tokens} jeton">${COIN}${isAdmin() ? "∞" : m.tokens}</span><span class="pill" aria-label="${totalStars()} yıldız"><b>★</b>${totalStars()}</span></div>` : ""}</div>
     <div class="prog"><span>${Core.BIOMES[w]} dünyası</span><div><i style="width:${(n % 10) * 10}%"></i></div><span>${n % 10} / 10</span></div>
     <button class="b3 xl" id="l-go">OYNA · Bölüm ${n + 1}${ws ? `<i class="ws" aria-label="Galibiyet serisi ${ws}">${svgIcon(ICONS.flame)}×${ws}</i>` : ""}</button>
-    <div class="acts">
+    ${st ? `<div class="acts">
       <button class="act${freeLeft <= 0 ? " ready" : ""}" id="l-free">${chestIcon("free")}<span>Bedava sandık</span><b id="l-free-t">${freeLeft <= 0 ? "Aç!" : hms(freeLeft)}</b></button>
       <button class="act${pend.length ? " ready" : ""}" id="l-box">${chestIcon(pend[0] || "star")}<span>${pend.length ? Meta.CHESTS[pend[0]][0] : "Yıldız sandığı"}</span><b>${pend.length > 1 ? pend.length + " sandık" : pend.length ? "Aç!" : `★ ${totalStars() % Meta.STAR_STEP} / ${Meta.STAR_STEP}`}</b></button>
       <button class="act${qReady ? " ready" : ""}" id="l-quest">${svgIcon(ICONS.quest)}<span>Görevler</span><b>${qReady ? "Ödül hazır" : `${qGot} / 3`}</b></button>
-    </div>
-    <div class="tiles">
-      <button class="tilebtn" id="l-map">${svgIcon(ICONS.map)}Harita</button><button class="tilebtn" id="l-duel">${svgIcon(ICONS.duel)}Düello${inbox ? `<i class="dot" aria-label="${inbox} meydan okuma">${inbox}</i>` : ""}</button>
-      <button class="tilebtn" id="l-rank">${svgIcon(ICONS.rank)}Sıralama</button><button class="tilebtn" id="l-shop">${svgIcon(ICONS.shop)}Mağaza</button><button class="tilebtn" id="l-help">${svgIcon(ICONS.help)}Nasıl?</button>
-    </div>
-    <p class="cloudline">${streakOn() ? `${profile.streak.n} günlük seri · ` : ""}${cloudInfo}</p>`;
+    </div>` : ""}
+    <div class="tiles" style="grid-template-columns:repeat(${tiles.length},1fr)">${tiles.join("")}</div>
+    <p class="cloudline">${streakOn() ? `${profile.streak.n} gün üst üste · ` : ""}${cloudInfo}</p>`;
   homeScene(w);
-  $("l-face").onclick = settings; $("l-go").onclick = () => intro(n); $("l-map").onclick = openMap; $("l-duel").onclick = duelHub; $("l-help").onclick = () => howTo(); $("l-rank").onclick = () => rankCard(); $("l-shop").onclick = () => shopCard();
-  $("l-tier").onclick = () => rankCard("cups"); $("l-quest").onclick = questCard;
-  $("l-free").onclick = () => (meta().freeAt <= Date.now() ? chestCard("free") : toast(`Bedava sandık ${hms(meta().freeAt - Date.now())} sonra açılır`));
-  $("l-box").onclick = () => { const k = pendingChests()[0]; if (k) chestCard(k); else toast(`Yıldız sandığına ${Meta.STAR_STEP - (totalStars() % Meta.STAR_STEP)} yıldız kaldı`); };
+  const on = (id, fn) => { const el = $(id); if (el) el.onclick = fn; }; // a stage that is not open yet has no such button
+  on("l-face", settings); on("l-go", () => intro(n)); on("l-map", openMap); on("l-duel", duelHub); on("l-help", () => howTo()); on("l-rank", () => rankCard()); on("l-shop", () => shopCard());
+  on("l-tier", () => rankCard("cups")); on("l-quest", questCard);
+  on("l-free", () => (meta().freeAt <= Date.now() ? chestCard("free") : toast(`Bedava sandık ${hms(meta().freeAt - Date.now())} sonra açılır`)));
+  on("l-box", () => { const k = pendingChests()[0]; if (k) chestCard(k); else toast(`Yıldız sandığına ${Meta.STAR_STEP - (totalStars() % Meta.STAR_STEP)} yıldız kaldı`); });
+  if (st > (prefs.stage || 0)) { prefs.stage = st; store.set("sw4:prefs", prefs); toast(st === 1 ? "Yeni: sandıklar, görevler ve harita açıldı" : "Yeni: düello, sıralama ve mağaza açıldı"); } // said once, when the stage opens
 }
 // ---- daily reward: once a day, a 7-day cycle; a missed day starts the cycle again ----
 const DAILY = [["ipucu"], ["karistir"], ["yenile"], ["joker"], ["ipucu", "karistir"], ["yenile", "joker"], ["karistir", "yenile", "ipucu", "joker"]];
@@ -501,7 +505,7 @@ function dailyReward() {
   card(`<span class="badge">Günlük ödül</span><h2>${n}. gün</h2>
     <div class="days">${DAILY.map((_, i) => `<i class="${i < day ? "got" : i === day ? "now" : ""}">${i + 1}</i>`).join("")}</div>
     <div class="gifts">${gifts.map((k, i) => `<div class="gift" style="animation-delay:${0.2 + i * 0.15}s">${icon(k)}<strong>+1</strong>${BOOSTERS[k].name}</div>`).join("")}</div>
-    <p>Her gün gir, seri büyüsün. 7. gün dört güçlendirici birden gelir.</p><button class="b3 xl" id="d-take">Al</button>`);
+    <p>Her gün gir, ödül büyüsün. 7. gün dört güçlendirici birden gelir.</p><button class="b3 xl" id="d-take">Al</button>`);
   $("d-take").onclick = () => { gifts.forEach((k) => inv()[k]++); profile.streak = { last: TODAY, n }; saveProfile(); snd.play("gift"); confetti(); closeCard(); renderLanding(); };
 }
 // ---- ranking: this week's league, today's duel, all-time stars ----
@@ -555,6 +559,9 @@ function settings() {
   card(`<h2>Ayarlar</h2>
     <div class="faces" id="s-faces"></div><input type="file" id="s-file" accept="image/*" hidden>
     <p class="hint">Karakterin ya da fotoğrafının küçük bir kopyası sıralamada ve haritada diğer oyunculara görünür.</p>
+    <h3>Oyun modu</h3>
+    <div class="tabs" id="s-mode" role="tablist" aria-label="Oyun modu">${[["renk", "Renk"], ["rahat", "Rahat"], ["klasik", "Klasik"]].map(([k, t]) => `<button role="tab" data-m="${k}" aria-selected="${prefs.mode === k}">${t}</button>`).join("")}</div>
+    <p class="modenote" id="s-note"></p>
     ${togsHTML(togs)}
     <div style="text-align:left"><label for="s-name"><strong>İsim</strong></label></div>
     <input class="field-in" id="s-name" maxlength="16" value="${esc(profile.name)}">
@@ -567,6 +574,9 @@ function settings() {
     <button class="b3 red" id="s-reset">İlerlemeyi sıfırla</button>
     <button class="b3 ghost" id="s-close">Kapat</button>`);
   bindTogs();
+  const note = () => ($("s-note").textContent = { renk: "Renk: kelime yok. Aynı renkten en az 3 taşı birleştir, çizdiğin yol blok olsun. Rekor ve lig puanı yazılmaz.", rahat: "Rahat: yazabileceğin kelimeler gösterilir; dokununca harfleri parlar. Rekor ve lig puanı yazılmaz.", klasik: "Klasik: kelimeleri kendin bulursun. Rekor ve lig puanı yazılır; hızlı bitirirsen süre bonusu alırsın." }[prefs.mode] + (G && !$("app").hidden ? " Bir sonraki bölümde geçerli olur." : ""));
+  $("s-mode").querySelectorAll("button").forEach((b) => (b.onclick = () => { prefs.mode = b.dataset.m; store.set("sw4:prefs", prefs); $("s-mode").querySelectorAll("button").forEach((x) => x.setAttribute("aria-selected", x === b)); note(); snd.play("toggle"); }));
+  note();
   paintFaces();
   $("s-file").onchange = async (e) => {
     const file = e.target.files[0]; e.target.value = ""; if (!file) return;
@@ -678,23 +688,26 @@ function playDemo() { // call once the card is on screen; it stops by itself whe
 }
 
 // ---- level intro and help ----
-function goalRows(L, left, brief) { // brief: the demo next to it does the explaining
-  return `<div class="goallist">${L.goals.map((g) => { const o = goalOf(g.type); return `<div>${o.svg}<span><strong>${o.name}: ${left ? Math.max(0, left[g.type]) + " kaldı" : g.need}</strong>${brief ? "" : o.how}</span></div>`; }).join("")}</div>`;
+function goalRows(L, left, tell = () => true) { // tell(type): whether that goal's rule is spelled out under its name
+  return `<div class="goallist">${L.goals.map((g) => { const o = goalOf(g.type); return `<div>${o.svg}<span><strong>${o.name}: ${left ? Math.max(0, left[g.type]) + " kaldı" : g.need}</strong>${tell(g.type) ? o.how : ""}</span></div>`; }).join("")}</div>`;
 }
-const floorLine = (L) => (L.rise ? `<p class="floorline"><span class="floorchip">${UP}<span>${L.rise}</span></span>Taş zemin her ${L.rise} hamlede alttan bir sıra yükselir. Satır patlatıp geri it; yer kalmazsa bölüm biter.</p>` : "");
-function intro(n) {
-  const L = Core.levelDef(n), theme = L.joker ? JOKER_THEME : THEMES[L.world], rec = recordOf(n), newWorld = n % 10 === 0 && n > 0, ws = L.joker ? 0 : Math.min(Meta.STREAK.length, meta().ws || 0);
+const floorLine = (L, brief) => (L.rise ? `<p class="floorline"><span class="floorchip">${UP}<span>${L.rise}</span></span>${brief ? `Taş zemin her ${L.rise} hamlede yükselir.` : `Taş zemin her ${L.rise} hamlede alttan bir sıra yükselir. Satır patlatıp geri it; yer kalmazsa bölüm biter.`}</p>` : "");
+// The level where each goal (and the rising floor) first appears: only there does the level card explain it. Later it is a name and a number.
+let FIRST = null;
+function firstOf(t) {
+  if (!FIRST) { FIRST = {}; for (let m = 0; m < 100; m++) { const L = Core.levelDef(m); for (const g of L.goals) FIRST[g.type] ??= m; if (L.rise) FIRST.rise ??= m; } }
+  return FIRST[t];
+}
+function intro(n) { // short on purpose: the goals and Başla. A rule is explained on the level that brings it; the mode lives in Settings.
+  const L = Core.levelDef(n), theme = L.joker ? JOKER_THEME : THEMES[L.world], rec = prefs.mode === "klasik" && recordOf(n), newWorld = n % 10 === 0 && n > 0, ws = L.joker ? 0 : Math.min(Meta.STREAK.length, meta().ws || 0);
+  const fresh = (t) => firstOf(t) === n, got = profile.stars[n] || 0;
   card(`<div class="lvlhead">${L.joker ? `<span class="badge">Joker bölümü</span>` : newWorld ? `<span class="badge plain">Yeni dünya · yeni engel</span>` : L.boss ? `<span class="badge boss">Patron bölümü</span>` : ""}<h2>Bölüm ${n + 1}</h2><p>${L.joker ? "Bol joker ve altın harf, ekstra hediye" : `${L.biome} dünyası`} · ${L.moves} hamle</p></div>
-    ${n % 10 === 0 || n === 1 ? goalRows(L, null, true) + demoHTML(n === 1 ? "crystal" : L.goals[0].type) : goalRows(L)}${floorLine(L)}
-    <div class="stars">${[1, 2, 3].map((k) => star(k <= (profile.stars[n] || 0), 34)).join("")}</div>
-    <button class="reclink" id="i-top" aria-label="Bu bölümün ilk 10'u">${CUP}${rec ? (rec.me ? `Rekor sende: ${rec.score} puan` : `Rekor: ${esc(rec.name)} · ${rec.score} puan`) : "Bu bölümde henüz rekor yok"} ›</button>
-    ${ws ? `<p class="wsline">${svgIcon(ICONS.flame)}Galibiyet serisi ×${ws}: ${["joker", "joker ve altın harf", "joker, altın ve bomba harfi"][ws - 1]} ile başlıyorsun</p>` : "<p>Hepsini bitir ★★★ · %70 ★★ · %40 ★</p>"}
-    <div class="tabs" id="i-mode" role="tablist" aria-label="Oyun modu">${[["renk", "Renk"], ["rahat", "Rahat"], ["klasik", "Klasik"]].map(([k, t]) => `<button role="tab" data-m="${k}" aria-selected="${prefs.mode === k}">${t}</button>`).join("")}</div>
-    <p class="modenote" id="i-note"></p>
+    ${goalRows(L, null, (t) => fresh(t) && !DEMOS[t])}${L.goals.map((g) => (fresh(g.type) ? demoHTML(g.type) : "")).join("")}${floorLine(L, !fresh("rise"))}
+    ${got ? `<div class="stars">${[1, 2, 3].map((k) => star(k <= got, 34)).join("")}</div>` : ""}
+    ${rec ? `<button class="reclink" id="i-top" aria-label="Bu bölümün ilk 10'u">${CUP}${rec.me ? `Rekor sende: ${rec.score} puan` : `Rekor: ${esc(rec.name)} · ${rec.score} puan`} ›</button>` : ""}
+    ${ws ? `<p class="wsline">${svgIcon(ICONS.flame)}Galibiyet serisi ×${ws}: ${["joker", "joker ve altın harf", "joker, altın ve bomba harfi"][ws - 1]} ile başlıyorsun</p>` : ""}
     <button class="b3 xl green" id="i-go">Başla</button><button class="b3 ghost" id="i-back">Vazgeç</button>`, theme);
-  const note = () => ($("i-note").textContent = { renk: "Renk: kelime yok. Aynı renkten en az 3 taşı birleştir, çizdiğin yol blok olsun. Rekor ve lig puanı yazılmaz.", rahat: "Rahat: yazabileceğin kelimeler gösterilir; dokununca harfleri parlar. Rekor ve lig puanı yazılmaz.", klasik: `Klasik: kelimeleri kendin bulursun. ${L.joker ? "" : `Üçüncü yıldız için ${mmss(Meta.parTime(L.moves))} içinde bitir. `}Rekor ve lig puanı yazılır.` }[prefs.mode]);
-  $("i-mode").querySelectorAll("button").forEach((b) => (b.onclick = () => { prefs.mode = b.dataset.m; store.set("sw4:prefs", prefs); $("i-mode").querySelectorAll("button").forEach((x) => x.setAttribute("aria-selected", x === b)); note(); snd.play("toggle"); }));
-  note(); $("i-top").onclick = () => levelTop(n);
+  if (rec) $("i-top").onclick = () => levelTop(n);
   $("i-go").onclick = () => (prefs.tut ? startLevel(n) : howTo(() => startLevel(n))); $("i-back").onclick = closeCard; playDemo();
 }
 const mmss = (s) => `${Math.floor(s / 60)}:${pad(Math.floor(s) % 60)}`;
@@ -746,7 +759,7 @@ function howTo(done, hues = prefs.mode === "renk") {
 function helpCard(L) { // in a level: just this level's goals; the rules are one tap further
   if (!L) return howTo();
   busy = true;
-  card(`<h2>Bu bölümde</h2>${goalRows(L, G.left, L.goals.every((g) => DEMOS[g.type]))}${floorLine(L)}${L.goals.map((g) => demoHTML(g.type)).join("")}
+  card(`<h2>Bu bölümde</h2>${goalRows(L, G.left, (t) => !DEMOS[t])}${floorLine(L)}${L.goals.map((g) => demoHTML(g.type)).join("")}
     <button class="b3 blue" id="h-ok">Anladım</button><button class="b3 ghost" id="h-how">Nasıl oynanır?</button>`);
   $("h-ok").onclick = () => { closeCard(); busy = false; };
   $("h-how").onclick = () => howTo();
@@ -763,7 +776,7 @@ function baseState(L, rnd, mode, hues = false) { // hues: the wordless mode, col
 }
 function startLevel(n) {
   abandon();
-  G = baseState(Core.levelDef(n), Math.random, "level", prefs.mode === "renk"); G.rec = recordOf(n); G.easy = prefs.mode === "rahat"; G.casual = prefs.mode !== "klasik"; G.timed = !G.casual && !G.L.joker; G.clock = 0; // Klasik levels are timed: the clock never ends a level, it decides the third star and the level ranking
+  G = baseState(Core.levelDef(n), Math.random, "level", prefs.mode === "renk"); G.rec = recordOf(n); G.easy = prefs.mode === "rahat"; G.casual = prefs.mode !== "klasik"; G.timed = !G.casual && !G.L.joker; G.clock = 0; // Klasik levels are timed: the clock never ends a level; seconds under the time are bonus points, and the time ranks the level
   if (!G.L.joker) streakTiles(G.grid, Math.min(Meta.STREAK.length, meta().ws || 0));
   openScreen();
 }
@@ -1062,16 +1075,15 @@ function endSwipe() {
   snd.play("word", w.length, G.chain); if (piece.gold) snd.play("gold");
   quest("words"); if (w.length >= 5) quest("long"); if (piece.gold) quest("gold", piece.gold);
   if (G.mode === "level") { G.moves--; bump($("moves")); }
-  const spots = (kind) => used.filter((i) => Core.kindOf(G.grid[i]) === kind).map((i) => centerOf(tiles[i].el)), pr = Core.wordProgress(w, piece);
-  if (pr.bomb) { credit("bomb", 1, spots("bomb")); snd.play("bombArm"); }
-  if (pr.long) credit("long", 1, [centerOf($("wordline"))]);
+  if (piece.bombIdx >= 0) snd.play("bombArm");
+  if (Core.wordProgress(w).long) credit("long", 1, [centerOf($("wordline"))]);
   const [wx, wy] = centerOf(tiles[used[used.length - 1]].el); popNum(`+${pts}`, wx, wy - 10);
   addScore(pts);
-  const parts = [`${G.hues ? w.length + " taş" : up(w)} +${pts}`]; if (G.chain > 1) parts.push(`Seri x${G.chain}`); if (piece.gold) parts.push("Altın"); if (piece.gems.length && G.left.crystal > 0) parts.push("Kristal blokta: patlat");
+  const parts = [`${G.hues ? w.length + " taş" : up(w)} +${pts}`]; if (G.chain > 1) parts.push(`Hız x${G.chain}`); if (piece.gold) parts.push("Altın"); if (piece.gems.length && G.left.crystal > 0) parts.push("Kristal blokta: patlat");
   say(parts.join(" · "), "ok");
   const res = Core.collapse(G.grid, used, G.rnd, { rates: G.L.rates, plantRate: G.L.plantRate, ensure: Core.ensureFor(G.left), hues: G.hues });
   animateWord(used, res, slotIdx); G.grid = res.grid;
-  if (G.chain === 4) setTimeout(() => { makeJoker("#FFB627"); toast("Seri ödülü: bir harf Joker oldu"); }, 700); // fast streak reward
+  if (G.chain === 4) setTimeout(() => { makeJoker("#FFB627"); toast("Hız ödülü: bir harf Joker oldu"); }, 700); // reward for four quick words in a row
   setTimeout(() => { renderHand(slotIdx); snd.play("blockPop"); }, RM ? 0 : 420);
   setTimeout(afterTurn, RM ? 0 : 700);
 }
@@ -1121,7 +1133,7 @@ async function placeBlock(k, p, at) {
     if (pts) { popNum(`+${pts}`, bx, by - 20); addScore(pts); }
     cheer(res, p, at);
     const pr = Core.boardProgress(res);
-    for (const kind in pr) credit(kind, pr[kind], [...res.broken.filter((x) => x.ob === kind).map((x) => x.i), ...(kind === "buz" ? res.cracked : kind === "crystal" ? res.gems : [])].map((i) => centerOf(cellEls[i])));
+    for (const kind in pr) credit(kind, pr[kind], [...res.broken.filter((x) => x.ob === kind).map((x) => x.i), ...(kind === "buz" ? res.cracked : kind === "crystal" ? res.gems : kind === "bomb" ? [res.bombAt] : [])].map((i) => centerOf(cellEls[i])));
     if (pr.crystal) snd.play("crystal");
     await ripple(first, res, placed);
   }
@@ -1276,10 +1288,9 @@ function noRoom() {
 const GIFTS_PER_STAR = { 1: ["karistir"], 2: ["ipucu"], 3: ["yenile", "joker"] };
 function levelEnd(stars, finishedAll) {
   busy = true;
-  const par = Meta.parTime(G.L.moves), took = Math.round(G.clock || 0), late = !!G.timed && finishedAll && took > par;
-  if (late) stars = 2; // Klasik: the third star is for a full finish inside the time; the level is passed either way
+  const par = Meta.parTime(G.L.moves), took = Math.round(G.clock || 0), fast = G.timed && finishedAll ? Math.max(0, par - took) : 0; // Klasik: every second under the time is a point; stars only count goals
   if (G.timed && finishedAll) { profile.time ||= {}; profile.time[G.L.n] = Math.min(profile.time[G.L.n] || Infinity, took); }
-  const L = G.L, bonus = finishedAll ? G.moves * 20 : 0, final = G.score + bonus, prev = profile.stars[L.n] || 0, prevBest = profile.best[L.n] || 0, rec = recordOf(L.n);
+  const L = G.L, bonus = (finishedAll ? G.moves * 20 : 0) + fast, final = G.score + bonus, prev = profile.stars[L.n] || 0, prevBest = profile.best[L.n] || 0, rec = recordOf(L.n);
   const gifts = []; for (let s = prev + 1; s <= stars; s++) gifts.push(...GIFTS_PER_STAR[s]); // only newly earned stars pay out
   if (L.joker && !prev) gifts.push(...["karistir", "yenile", "ipucu", "joker"].sort(() => Math.random() - 0.5).slice(0, 2)); // joker levels give two extra gifts the first time
   gifts.forEach((k) => inv()[k]++);
@@ -1292,10 +1303,10 @@ function levelEnd(stars, finishedAll) {
   const recLine = beat ? `${esc(rec.name)} geride kaldı: bu bölümün rekoru artık sende!` : rec && !rec.me ? `Rekor hâlâ ${esc(rec.name)}'de: ${rec.score} puan` : prevBest && gain ? "Kendi rekorunu geçtin" : "";
   card(`<div class="lvlhead"><div class="stars">${[1, 2, 3].map((s, i) => star(s <= stars).replace("<svg", `<svg style="animation-delay:${0.2 + i * 0.25}s"`)).join("")}</div>
     <h2>Bölüm ${L.n + 1} ${stars === 3 ? "tamam!" : "geçildi"}</h2></div><div class="big" id="o-score">${G.score}</div>
-    <p>${finishedAll ? (G.moves ? `Kalan ${G.moves} hamle × 20 = +${bonus}` : "Son hamlede bitirdin.") : `Hedeflerin bir kısmı kaldı. Tekrar oynayıp ${stars + 1}. yıldızı alabilirsin.`}</p>
-    ${G.timed && finishedAll ? `<p class="${late ? "modenote" : "rec"}">Süre ${mmss(took)} · ${late ? `3. yıldız için ${mmss(par)} içinde bitir` : `süre sınırı ${mmss(par)} içinde`}</p>` : ""}
-    ${G.casual ? `<p class="modenote">Rekor ve lig puanı yalnızca Klasik modda yazılır.</p>` : recLine ? `<p class="rec">${recLine}</p>` : ""}${gain ? `<p>Haftalık lig: +${gain} puan</p>` : ""}
-    <p class="earn">${COIN}+${tok} jeton · <span class="fl">${svgIcon(ICONS.flame)}</span>Seri ×${m.ws} · ${chestLine}</p>
+    <p>${finishedAll ? (G.moves ? `Kalan ${G.moves} hamle × 20 = +${G.moves * 20}` : "Son hamlede bitirdin.") : `Hedeflerin bir kısmı kaldı. Tekrar oynayıp ${stars + 1}. yıldızı alabilirsin.`}</p>
+    ${G.timed && finishedAll ? `<p class="${fast ? "rec" : "modenote"}">Süre ${mmss(took)} · ${fast ? `süre bonusu +${fast}` : `süre bonusu yok (sınır ${mmss(par)})`}</p>` : ""}
+    ${G.casual ? (homeStage() >= 2 ? `<p class="modenote">Rekor ve lig puanı için Ayarlar'dan Klasik modu seç.</p>` : "") : recLine ? `<p class="rec">${recLine}</p>` : ""}${gain ? `<p>Haftalık lig: +${gain} puan</p>` : ""}
+    <p class="earn"><span>${COIN}+${tok} jeton</span>${m.ws >= 2 ? `<span><span class="fl">${svgIcon(ICONS.flame)}</span>Galibiyet serisi ×${m.ws}</span>` : ""}${homeStage() ? `<span>${chestLine}</span>` : ""}</p>
     ${gifts.length ? `<h3>Hediyeler</h3><div class="gifts">${gifts.map((k, i) => `<div class="gift" style="animation-delay:${0.9 + i * 0.18}s">${icon(k)}<strong>+1</strong>${BOOSTERS[k].name}</div>`).join("")}</div>` : `<p>Bu yıldızların hediyelerini almıştın. Daha çok yıldız, daha çok hediye.</p>`}
     <button class="b3 xl green" id="o-next">Sonraki bölüm</button><div class="row2"><button class="b3 ghost" id="o-again">Tekrar</button><button class="b3 ghost" id="o-map">Harita</button></div>`, L.joker ? JOKER_THEME : THEMES[L.world]);
   const sc = $("o-score"), t0 = performance.now(); // count the move bonus up

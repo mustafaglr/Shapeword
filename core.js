@@ -258,10 +258,10 @@
   function place(board, piece, r0, c0, tag) {
     const b = board.slice();
     piece.cells.forEach(([r, c], k) => (b[(r0 + r) * B + c0 + c] = piece.gems.includes(k) ? { color: tag, gem: true } : { color: tag }));
-    const ev = { lines: 0, regions: [], cleared: [], gems: [], cracked: [], broken: [], bombed: [], blasts: [], blocked: [], acts: [], late: [], stings: 0 };
+    const ev = { lines: 0, regions: [], cleared: [], gems: [], cracked: [], broken: [], bombed: [], blasts: [], blocked: [], acts: [], late: [], stings: 0, bombAt: -1 };
     const hadShield = has(b, "jenerator"), full = fullRegions(b), seeds = new Set(full.flat());
     ev.lines = full.length; ev.regions = full;
-    if (piece.bombIdx >= 0) for (const j of around((r0 + piece.cells[piece.bombIdx][0]) * B + c0 + piece.cells[piece.bombIdx][1])) if (b[j]) { ev.bombed.push(j); seeds.add(j); }
+    if (piece.bombIdx >= 0) { ev.bombAt = (r0 + piece.cells[piece.bombIdx][0]) * B + c0 + piece.cells[piece.bombIdx][1]; for (const j of around(ev.bombAt)) if (b[j]) { ev.bombed.push(j); seeds.add(j); } }
     resolve(b, seeds, ev);
     actTurn(b, ev);
     const late = fullRegions(b);
@@ -308,7 +308,7 @@
   const worldOf = (n) => Math.floor(n / 10) % WORLDS.length;
   // Move budgets for levels 1-100: the 75th percentile of the words a greedy bot needed (8 letter seeds per level, 0 = joker level).
   // Regenerate with `node test.js --calibrate` after changing level generation, an obstacle rule or the word list.
-  const MOVES = [7, 10, 7, 7, 8, 8, 0, 7, 8, 8, 7, 7, 8, 0, 7, 8, 7, 7, 7, 7, 8, 10, 7, 7, 7, 7, 7, 0, 9, 7, 9, 7, 8, 7, 0, 11, 7, 10, 7, 7, 7, 0, 8, 7, 11, 8, 13, 10, 0, 9, 7, 7, 10, 9, 7, 0, 14, 9, 11, 7, 7, 14, 0, 12, 10, 8, 10, 7, 12, 0, 7, 11, 10, 12, 12, 14, 0, 15, 12, 17, 18, 17, 12, 0, 15, 14, 13, 16, 10, 7, 7, 16, 9, 8, 13, 12, 8, 0, 7, 17];
+  const MOVES = [8, 7, 7, 7, 7, 8, 0, 7, 7, 7, 7, 7, 8, 0, 7, 8, 7, 7, 7, 7, 8, 10, 7, 7, 7, 7, 7, 0, 9, 7, 9, 7, 8, 7, 0, 11, 7, 10, 7, 7, 7, 0, 8, 7, 11, 8, 13, 10, 0, 9, 7, 7, 10, 9, 7, 0, 14, 9, 11, 7, 7, 14, 0, 12, 10, 8, 10, 7, 12, 0, 7, 11, 10, 12, 12, 14, 0, 15, 12, 17, 18, 17, 12, 0, 15, 14, 13, 16, 10, 7, 7, 16, 9, 8, 13, 12, 8, 0, 7, 17];
   const botMoves = (n) => MOVES[n % 100] || 20;
   const SIZE = { kutuk: [6, 10], akrep: [2, 4], yengec: [3, 6], lav: [4, 8], buz: [3, 6], hayalet: [2, 4], tomurcuk: [6, 10], dinamit: [3, 5], cekirdek: [2, 4], bosluk: [2, 4] }; // cells: [a world's early levels, cap]
   const obCount = (kind, n) => Math.min(SIZE[kind][1], SIZE[kind][0] + Math.floor((n % 10) / 3) + Math.floor(n / 100));
@@ -329,15 +329,20 @@
     }
     return placed;
   }
-  // Hand-made opening in the forest: gentle, but every level already mixes goals
+  // Hand-made first world: one new thing at a time, then a level that repeats it; never more than two goals
   const EARLY = [
-    [["kutuk", 6]],
-    [["crystal", 3], ["kutuk", 4]],
-    [["long", 2], ["kutuk", 4]],
-    [["bomb", 2], ["kutuk", 4]],
-    [["crystal", 4], ["long", 2]],
-    [["kutuk", 6], ["crystal", 3], ["bomb", 2]],
+    [["kutuk", 6]],                  // 1: logs
+    [["kutuk", 8]],                  // 2: again
+    [["crystal", 3]],                // 3: crystals
+    [["crystal", 3], ["kutuk", 4]],  // 4: again, with logs
+    [["long", 2], ["kutuk", 4]],     // 5: long words
+    [["long", 3], ["crystal", 3]],   // 6: again
+    null,                            // 7: the joker level
+    [["bomb", 2], ["kutuk", 4]],     // 8: bombs
+    [["bomb", 2], ["crystal", 3]],   // 9: again
+    [["kutuk", 8], ["long", 3]],     // 10: the world's boss
   ];
+  const BOMB_FROM = 7; // no bomb letters before the level that teaches them
   const SCORE_PER_WORD = 42; // median points per word + placement on joker levels, measured with the bot
   const isJoker = (n) => n >= 6 && n % 7 === 6 && n % 10 !== 0; // never on a world's first level: that one introduces the obstacle
   function levelDef(n) {
@@ -345,7 +350,7 @@
     if (isJoker(n)) { // bonus level: rich letters, one score goal, extra gifts
       const moves = 12 + Math.min(8, Math.floor(n / 20));
       return { n, world, biome, joker: true, goals: [{ type: "score", need: Math.round((SCORE_PER_WORD * moves * 0.75) / 50) * 50 }], board, moves, plantRate: 0.6,
-        rates: { joker: 0.15, bomb: 0.07, gold: 0.15, crystal: 0 } };
+        rates: { joker: 0.15, bomb: n < BOMB_FROM ? 0 : 0.07, gold: 0.15, crystal: 0 } };
     }
     let plan;
     if (n < EARLY.length) plan = EARLY[n];
@@ -366,7 +371,7 @@
     const moves = Math.ceil(botMoves(n) * (n < 10 ? 1.7 : n < 30 ? 1.5 : 1.35)) + 2 * Math.floor(n / 100); // people plan less sharply than the bot, beginners least; later rounds carry more obstacles
     const types = goals.map((g) => g.type);
     return { n, world, biome, joker: false, boss: isBoss(n), rise, risen, goals, board: start, moves: moves + (isBoss(n) ? 3 : 0), plantRate: 0.5,
-      rates: { ...BASE_RATES, crystal: types.includes("crystal") ? 0.15 : 0, bomb: types.includes("bomb") ? 0.09 : BASE_RATES.bomb } };
+      rates: { ...BASE_RATES, crystal: types.includes("crystal") ? 0.15 : 0, bomb: types.includes("bomb") ? 0.09 : n < BOMB_FROM ? 0 : BASE_RATES.bomb } };
   }
   // Stars from how much of the goals got done: all = 3, 70% = 2, 40% = 1, less = level not passed
   function starsFor(L, left) {
@@ -376,10 +381,12 @@
   // Points: shared by the page and the test bot so budgets and score goals match what players see
   const wordPoints = (word, piece, chain = 1) => word.length * 3 * 2 ** piece.gold * chain + (word.length >= 5 ? 15 : 0);
   const clearPoints = (res, combo = 1) => (res.lines ? 20 * res.lines * res.lines * Math.max(1, combo) : 0) + res.bombed.length * 5 + res.broken.length * 10 + res.blasts.length * 15;
-  // Goal progress: what a word earns by itself, what its placement earns on the board, and both together (for the bot)
-  const wordProgress = (word, piece) => ({ long: word.length >= 5 ? 1 : 0, bomb: piece.bombIdx >= 0 ? 1 : 0 });
+  // Goal progress: what a word earns by itself (only its length), what its placement earns on the board, and both together (for the bot).
+  // Crystals and bombs count on the board: a crystal when its cell is cleared, a bomb when its block lands and goes off.
+  const wordProgress = (word) => ({ long: word.length >= 5 ? 1 : 0 });
   function boardProgress(res) {
     const p = res.gems.length ? { crystal: res.gems.length } : {};
+    if (res.bombAt >= 0) p.bomb = 1;
     for (const x of res.broken) p[x.ob] = (p[x.ob] || 0) + 1;
     for (const i of res.cracked) { const k = res.board[i] ? res.board[i].ob : "buz"; p[k] = (p[k] || 0) + 1; } // a crack is a hit; a cell cracked and then broken in one turn counts both
     if (p.lav && !has(res.board, "lav")) p.lav = 999; // the last lava is out: that goal is done however many were asked for
